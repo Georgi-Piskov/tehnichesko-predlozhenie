@@ -5,7 +5,7 @@
 // ===== Configuration =====
 const CONFIG = {
     // Set this to your n8n webhook base URL
-    N8N_WEBHOOK_URL: 'https://YOUR-N8N-INSTANCE.com',
+    N8N_WEBHOOK_URL: 'https://n8n.simeontsvetanovn8nworkflows.site',
     POLL_INTERVAL: 4000, // Poll every 4 seconds
     MAX_POLL_TIME: 30 * 60 * 1000 // 30 minute timeout
 };
