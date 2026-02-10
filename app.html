@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Генератор на Технически Предложения</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div class="toast-container" id="toastContainer"></div>
+
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <h1>📄 Генератор на Технически Предложения</h1>
+            <p>Автоматично изготвяне на технически предложения за обществени поръчки</p>
+        </header>
+
+        <!-- Steps Indicator -->
+        <div class="steps-indicator" id="stepsIndicator">
+            <div class="step-item active" data-step="1">
+                <span class="step-number">1</span>
+                <span class="step-label">Изпълнител</span>
+            </div>
+            <div class="step-item" data-step="2">
+                <span class="step-number">2</span>
+                <span class="step-label">Документи</span>
+            </div>
+            <div class="step-item" data-step="3">
+                <span class="step-number">3</span>
+                <span class="step-label">Генериране</span>
+            </div>
+            <div class="step-item" data-step="4">
+                <span class="step-number">4</span>
+                <span class="step-label">Резултат</span>
+            </div>
+        </div>
+
+        <!-- ========== STEP 1: Contractor Info ========== -->
+        <div class="section-panel active" id="step1">
+            <div class="card">
+                <h2 class="card-title"><span class="icon">🏢</span> Данни за изпълнителя</h2>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Наименование на фирмата <span class="required">*</span></label>
+                        <input type="text" class="form-input" id="companyName" placeholder="напр. БАРИН АЛП ЕООД">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">ЕИК <span class="required">*</span></label>
+                        <input type="text" class="form-input" id="companyEik" placeholder="напр. 202151992">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Адрес <span class="required">*</span></label>
+                        <input type="text" class="form-input" id="companyAddress" placeholder="напр. гр. Смолян, ул. България 14">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Управител <span class="required">*</span></label>
+                        <input type="text" class="form-input" id="companyManager" placeholder="Трите имена">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Телефон</label>
+                        <input type="text" class="form-input" id="companyPhone" placeholder="напр. 0888 123 456">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Е-mail</label>
+                        <input type="email" class="form-input" id="companyEmail" placeholder="office@company.bg">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Кратко описание на фирмата</label>
+                    <textarea class="form-textarea" id="companyDescription" rows="3"
+                        placeholder="Основна дейност, опит, сертификати (ISO, OHSAS и др.)"></textarea>
+                    <span class="form-hint">Опционално. Ще бъде използвано за контекст при генерирането.</span>
+                </div>
+
+                <div class="btn-group" style="justify-content: flex-end;">
+                    <button class="btn btn-primary" onclick="goToStep(2)">Напред →</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== STEP 2: Documents Upload ========== -->
+        <div class="section-panel" id="step2">
+            <!-- Procurement Documentation -->
+            <div class="card">
+                <h2 class="card-title"><span class="icon">📋</span> Документация за обществената поръчка</h2>
+                <p class="form-hint" style="margin-bottom: 1rem;">
+                    Качете документацията от възложителя. Системата ще извлече изискванията за техническото предложение автоматично.
+                </p>
+                <div class="file-upload-zone" id="docUploadZone">
+                    <div class="upload-icon">📁</div>
+                    <div class="upload-text">
+                        <strong>Натиснете или плъзнете файл тук</strong><br>
+                        PDF или DOCX, до 50MB
+                    </div>
+                    <input type="file" id="docFile" accept=".pdf,.docx,.doc">
+                </div>
+                <div id="docFileInfo" style="display:none;"></div>
+            </div>
+
+            <!-- Technical Specification -->
+            <div class="card">
+                <h2 class="card-title"><span class="icon">📐</span> Техническа спецификация</h2>
+                <p class="form-hint" style="margin-bottom: 1rem;">
+                    Качете техническата спецификация / задание. Съдържа конкретните технически параметри на обекта.
+                </p>
+                <div class="file-upload-zone" id="specUploadZone">
+                    <div class="upload-icon">📁</div>
+                    <div class="upload-text">
+                        <strong>Натиснете или плъзнете файл тук</strong><br>
+                        PDF или DOCX, до 50MB
+                    </div>
+                    <input type="file" id="specFile" accept=".pdf,.docx,.doc">
+                </div>
+                <div id="specFileInfo" style="display:none;"></div>
+            </div>
+
+            <!-- Additional context -->
+            <div class="card">
+                <h2 class="card-title"><span class="icon">💡</span> Допълнителни указания (опционално)</h2>
+                <div class="form-group">
+                    <label class="form-label">Допълнителна информация</label>
+                    <textarea class="form-textarea" id="additionalNotes" rows="4"
+                        placeholder="Специфична информация, която искате да бъде отразена в предложението. Напр. конкретен опит с подобни обекти, специфични машини, партньори и т.н."></textarea>
+                </div>
+            </div>
+
+            <div class="btn-group" style="justify-content: space-between;">
+                <button class="btn btn-secondary" onclick="goToStep(1)">← Назад</button>
+                <button class="btn btn-primary btn-lg" id="generateBtn" onclick="startGeneration()">
+                    🚀 Генерирай техническо предложение
+                </button>
+            </div>
+        </div>
+
+        <!-- ========== STEP 3: Progress ========== -->
+        <div class="section-panel" id="step3">
+            <div class="card">
+                <h2 class="card-title"><span class="icon">⚙️</span> Генериране на техническо предложение</h2>
+
+                <div class="progress-bar-wrapper">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+
+                <p id="progressText" style="text-align: center; margin-bottom: 1.5rem; font-weight: 500;">
+                    Стартиране...
+                </p>
+
+                <div class="progress-phases" id="progressPhases">
+                    <div class="phase-item" data-phase="upload">
+                        <span class="phase-icon">⏳</span>
+                        <span>Качване и обработка на файлове</span>
+                    </div>
+                    <div class="phase-item" data-phase="extract">
+                        <span class="phase-icon">⏳</span>
+                        <span>Извличане на изисквания от документацията</span>
+                    </div>
+                    <div class="phase-item" data-phase="analyze">
+                        <span class="phase-icon">⏳</span>
+                        <span>Анализ на техническата спецификация</span>
+                    </div>
+                    <div class="phase-item" data-phase="plan">
+                        <span class="phase-icon">⏳</span>
+                        <span>Планиране на структурата на документа</span>
+                    </div>
+                    <div class="phase-item" data-phase="write">
+                        <span class="phase-icon">⏳</span>
+                        <span>Писане на секции (0/0)</span>
+                    </div>
+                    <div class="phase-item" data-phase="validate">
+                        <span class="phase-icon">⏳</span>
+                        <span>Валидация за пълнота и релевантност</span>
+                    </div>
+                    <div class="phase-item" data-phase="finalize">
+                        <span class="phase-icon">⏳</span>
+                        <span>Финална редакция и форматиране</span>
+                    </div>
+                    <div class="phase-item" data-phase="export">
+                        <span class="phase-icon">⏳</span>
+                        <span>Генериране на DOCX файл</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== STEP 4: Result ========== -->
+        <div class="section-panel" id="step4">
+            <div class="card">
+                <h2 class="card-title"><span class="icon">✅</span> Техническото предложение е готово!</h2>
+
+                <div id="resultStats" style="display: flex; gap: 1.5rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
+                    <div style="background: var(--primary-light); padding: 1rem 1.5rem; border-radius: 8px; flex: 1; min-width: 140px; text-align: center;">
+                        <div style="font-size: 1.5rem; font-weight: 700; color: var(--primary);" id="statPages">0</div>
+                        <div style="font-size: 0.8rem; color: var(--text-light);">Страници</div>
+                    </div>
+                    <div style="background: #f0fdf4; padding: 1rem 1.5rem; border-radius: 8px; flex: 1; min-width: 140px; text-align: center;">
+                        <div style="font-size: 1.5rem; font-weight: 700; color: var(--success);" id="statSections">0</div>
+                        <div style="font-size: 0.8rem; color: var(--text-light);">Секции</div>
+                    </div>
+                    <div style="background: #fef3c7; padding: 1rem 1.5rem; border-radius: 8px; flex: 1; min-width: 140px; text-align: center;">
+                        <div style="font-size: 1.5rem; font-weight: 700; color: #92400e;" id="statPlaceholders">0</div>
+                        <div style="font-size: 0.8rem; color: var(--text-light);">За попълване</div>
+                    </div>
+                </div>
+
+                <div class="download-actions">
+                    <button class="btn btn-success btn-lg" id="downloadDocx" onclick="downloadResult('docx')">
+                        📥 Изтегли DOCX
+                    </button>
+                    <button class="btn btn-secondary" onclick="togglePreview()">
+                        👁️ Преглед
+                    </button>
+                    <button class="btn btn-secondary" onclick="goToStep(1)">
+                        🔄 Ново предложение
+                    </button>
+                </div>
+            </div>
+
+            <div class="card" id="previewCard" style="display: none;">
+                <h2 class="card-title"><span class="icon">👁️</span> Преглед на документа</h2>
+                <div class="preview-content" id="previewContent"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/fileUpload.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

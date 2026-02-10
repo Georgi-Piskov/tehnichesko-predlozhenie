@@ -1,0 +1,290 @@
+{
+  "name": "TP Generator - Status & Download API",
+  "nodes": [
+    {
+      "id": "status-webhook",
+      "name": "Status Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "position": [0, 300],
+      "webhookId": "job-status-webhook",
+      "parameters": {
+        "path": "job-status",
+        "httpMethod": "GET",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "get-job-status",
+      "name": "Get Job Status",
+      "type": "n8n-nodes-base.code",
+      "position": [240, 300],
+      "parameters": {
+        "jsCode": "const jobId = $json.query?.jobId || $json.headers?.['x-job-id'] || '';\n\nif (!jobId) {\n  return [{\n    json: {\n      error: true,\n      status: 'error',\n      message: 'Липсва jobId параметър'\n    }\n  }];\n}\n\n// Get job data from the main workflow's static data\n// Note: This workflow shares static data scope with the main orchestrator\n// In production, use a database or Redis for cross-workflow state\nconst staticData = $getWorkflowStaticData('global');\n\nif (!staticData.jobs || !staticData.jobs[jobId]) {\n  return [{\n    json: {\n      status: 'not_found',\n      phase: 'unknown',\n      progress: 0,\n      message: 'Заявка с този ID не е намерена. Възможно е да се обработва в друг workflow.'\n    }\n  }];\n}\n\nconst job = staticData.jobs[jobId];\n\nconst response = {\n  status: job.status || 'processing',\n  phase: job.phase || 'init',\n  progress: job.progress || 0,\n  message: job.message || 'Обработка...',\n  startedAt: job.startedAt\n};\n\n// If completed, include stats but not the full text\nif (job.status === 'completed' && job.result) {\n  response.result = {\n    stats: job.result.stats,\n    hasDocument: true\n  };\n  response.completedAt = job.completedAt;\n}\n\nif (job.status === 'error') {\n  response.error = job.error || 'Неизвестна грешка';\n}\n\nreturn [{ json: response }];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "respond-status",
+      "name": "Respond with Status",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [480, 300],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "Content-Type"
+              }
+            ]
+          }
+        }
+      },
+      "typeVersion": 1.1
+    },
+    {
+      "id": "preview-webhook",
+      "name": "Preview Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "position": [0, 600],
+      "webhookId": "preview-webhook",
+      "parameters": {
+        "path": "preview",
+        "httpMethod": "GET",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "get-preview",
+      "name": "Get Preview Data",
+      "type": "n8n-nodes-base.code",
+      "position": [240, 600],
+      "parameters": {
+        "jsCode": "const jobId = $json.query?.jobId || '';\n\nif (!jobId) {\n  return [{\n    json: { error: true, message: 'Липсва jobId' }\n  }];\n}\n\nconst staticData = $getWorkflowStaticData('global');\n\nif (!staticData.jobs || !staticData.jobs[jobId]) {\n  return [{\n    json: { error: true, message: 'Заявка не е намерена' }\n  }];\n}\n\nconst job = staticData.jobs[jobId];\n\nif (job.status !== 'completed' || !job.result) {\n  return [{\n    json: { error: true, message: 'Документът все още не е готов' }\n  }];\n}\n\n// Convert Markdown to basic HTML for preview\nlet html = job.result.text || '';\n\n// Basic Markdown to HTML conversion\nhtml = html\n  .replace(/^### (.*$)/gm, '<h3>$1</h3>')\n  .replace(/^## (.*$)/gm, '<h2>$1</h2>')\n  .replace(/^# (.*$)/gm, '<h1>$1</h1>')\n  .replace(/\\*\\*(.*?)\\*\\*/g, '<strong>$1</strong>')\n  .replace(/\\*(.*?)\\*/g, '<em>$1</em>')\n  .replace(/^- (.*$)/gm, '<li>$1</li>')\n  .replace(/\\n\\n/g, '</p><p>')\n  .replace(/\\[⚠️ ПОПЪЛНЕТЕ: (.*?)\\]/g, '<span class=\"placeholder\">[⚠️ ПОПЪЛНЕТЕ: $1]</span>');\n\nhtml = '<div class=\"preview-document\"><p>' + html + '</p></div>';\n\nreturn [{\n  json: {\n    html: html,\n    stats: job.result.stats\n  }\n}];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "respond-preview",
+      "name": "Respond with Preview",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [480, 600],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "Content-Type"
+              }
+            ]
+          }
+        }
+      },
+      "typeVersion": 1.1
+    },
+    {
+      "id": "download-webhook",
+      "name": "Download Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "position": [0, 900],
+      "webhookId": "download-webhook",
+      "parameters": {
+        "path": "download",
+        "httpMethod": "GET",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "get-download",
+      "name": "Get Download Data",
+      "type": "n8n-nodes-base.code",
+      "position": [240, 900],
+      "parameters": {
+        "jsCode": "const jobId = $json.query?.jobId || '';\nconst format = $json.query?.format || 'markdown';\n\nif (!jobId) {\n  return [{\n    json: { error: true, message: 'Липсва jobId' }\n  }];\n}\n\nconst staticData = $getWorkflowStaticData('global');\n\nif (!staticData.jobs || !staticData.jobs[jobId]) {\n  return [{\n    json: { error: true, message: 'Заявка не е намерена' }\n  }];\n}\n\nconst job = staticData.jobs[jobId];\n\nif (job.status !== 'completed' || !job.result) {\n  return [{\n    json: { error: true, message: 'Документът все още не е готов' }\n  }];\n}\n\nconst text = job.result.text || '';\n\n// For now, return as Markdown text\n// DOCX conversion can be added with an additional node\nconst fileName = 'Tehnichesko_Predlozhenie_' + jobId + '.md';\n\n// Create binary data from text\nconst binaryData = Buffer.from(text, 'utf-8');\n\nreturn [{\n  json: {\n    fileName: fileName,\n    mimeType: 'text/markdown',\n    text: text\n  },\n  binary: {\n    data: {\n      data: binaryData.toString('base64'),\n      mimeType: 'text/markdown; charset=utf-8',\n      fileName: fileName\n    }\n  }\n}];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "respond-download",
+      "name": "Respond with Download",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [480, 900],
+      "parameters": {
+        "respondWith": "binary",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Content-Disposition",
+                "value": "=attachment; filename=\"{{ $json.fileName }}\""
+              }
+            ]
+          }
+        }
+      },
+      "typeVersion": 1.1
+    },
+    {
+      "id": "cors-webhook",
+      "name": "CORS Preflight",
+      "type": "n8n-nodes-base.webhook",
+      "position": [0, 1200],
+      "webhookId": "cors-preflight-webhook",
+      "parameters": {
+        "path": "=*",
+        "httpMethod": "OPTIONS",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "respond-cors",
+      "name": "Respond CORS",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [240, 1200],
+      "parameters": {
+        "respondWith": "noData",
+        "options": {
+          "responseCode": 204,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "GET, POST, OPTIONS"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "Content-Type, X-Job-Id"
+              },
+              {
+                "name": "Access-Control-Max-Age",
+                "value": "86400"
+              }
+            ]
+          }
+        }
+      },
+      "typeVersion": 1.1
+    }
+  ],
+  "connections": {
+    "Status Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get Job Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Job Status": {
+      "main": [
+        [
+          {
+            "node": "Respond with Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preview Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get Preview Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Preview Data": {
+      "main": [
+        [
+          {
+            "node": "Respond with Preview",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get Download Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Download Data": {
+      "main": [
+        [
+          {
+            "node": "Respond with Download",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CORS Preflight": {
+      "main": [
+        [
+          {
+            "node": "Respond CORS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "staticData": null,
+  "tags": [
+    {
+      "name": "technical-proposal"
+    }
+  ],
+  "triggerCount": 4
+}

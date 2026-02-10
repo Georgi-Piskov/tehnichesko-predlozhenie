@@ -3,41 +3,100 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Техническо Предложение</title>
+    <title>Генератор на Технически Предложения</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Inter', 'Segoe UI', sans-serif;
+            min-height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
-            min-height: 100vh;
-            background: linear-gradient(135deg, #1a1a2e, #16213e, #0f3460);
-            color: #e0e0e0;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+            color: #e2e8f0;
         }
-        .container {
+        .landing {
             text-align: center;
-            padding: 2rem;
+            padding: 3rem 2rem;
+            max-width: 600px;
         }
+        .landing-icon { font-size: 4rem; margin-bottom: 1.5rem; }
         h1 {
-            font-size: 2.5rem;
-            margin-bottom: 1rem;
-            color: #e94560;
+            font-size: 2.25rem;
+            font-weight: 700;
+            margin-bottom: 0.75rem;
+            background: linear-gradient(135deg, #60a5fa, #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
-        p {
-            font-size: 1.2rem;
-            color: #a0a0b0;
+        .subtitle {
+            font-size: 1.1rem;
+            color: #94a3b8;
+            margin-bottom: 2.5rem;
+            line-height: 1.6;
         }
+        .cta-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 1rem 2.5rem;
+            background: linear-gradient(135deg, #2563eb, #7c3aed);
+            color: white;
+            text-decoration: none;
+            border-radius: 12px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4);
+        }
+        .cta-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px rgba(37, 99, 235, 0.5);
+        }
+        .features {
+            display: flex;
+            gap: 1.5rem;
+            margin-top: 3rem;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .feature {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 1.25rem;
+            width: 160px;
+            text-align: center;
+        }
+        .feature-icon { font-size: 1.5rem; margin-bottom: 0.5rem; }
+        .feature-text { font-size: 0.8rem; color: #94a3b8; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Техническо Предложение</h1>
-        <p>Проектът е в процес на разработка.</p>
+    <div class="landing">
+        <div class="landing-icon">📄</div>
+        <h1>Генератор на Технически Предложения</h1>
+        <p class="subtitle">
+            Автоматично изготвяне на технически предложения за обществени поръчки
+            с помощта на AI агенти. Качете документацията — получете готов документ.
+        </p>
+        <a href="app.html" class="cta-btn">🚀 Започни</a>
+        <div class="features">
+            <div class="feature">
+                <div class="feature-icon">🤖</div>
+                <div class="feature-text">AI анализ на изисквания</div>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">✅</div>
+                <div class="feature-text">Автоматична валидация</div>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">📥</div>
+                <div class="feature-text">Експорт в DOCX</div>
+            </div>
+        </div>
     </div>
 </body>
 </html>

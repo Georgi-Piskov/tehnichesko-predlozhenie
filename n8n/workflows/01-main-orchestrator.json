@@ -1,0 +1,995 @@
+{
+  "name": "TP Generator - Main Orchestrator",
+  "nodes": [
+    {
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "position": [0, 300],
+      "webhookId": "generate-proposal-webhook",
+      "parameters": {
+        "path": "generate-proposal",
+        "httpMethod": "POST",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": false
+        }
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "init-job",
+      "name": "Initialize Job",
+      "type": "n8n-nodes-base.code",
+      "position": [220, 300],
+      "parameters": {
+        "jsCode": "// Generate a unique job ID\nconst jobId = 'tp-' + Date.now() + '-' + Math.random().toString(36).substring(2, 8);\n\n// Extract contractor info from form data\nconst body = $input.first().json.body || $input.first().json;\n\nconst contractorInfo = {\n  company_name: body.companyName || '',\n  eik: body.eik || '',\n  address: body.address || '',\n  manager: body.manager || '',\n  phone: body.phone || '',\n  email: body.email || '',\n  description: body.companyDescription || ''\n};\n\n// Store job in workflow static data\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.jobs) staticData.jobs = {};\n\nstaticData.jobs[jobId] = {\n  status: 'processing',\n  phase: 'init',\n  progress: 0,\n  message: 'Инициализация на заявката...',\n  startedAt: new Date().toISOString(),\n  contractorInfo: contractorInfo\n};\n\nreturn [{\n  json: {\n    jobId: jobId,\n    contractorInfo: contractorInfo\n  },\n  binary: $input.first().binary\n}];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "respond-webhook",
+      "name": "Respond with Job ID",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [440, 160],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ jobId: $json.jobId, status: 'processing', message: 'Заявката е приета. Обработката е стартирана.' }) }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "Content-Type"
+              }
+            ]
+          }
+        }
+      },
+      "typeVersion": 1.1
+    },
+    {
+      "id": "update-phase-extract",
+      "name": "Update Phase: Extract",
+      "type": "n8n-nodes-base.code",
+      "position": [440, 440],
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nconst jobId = $('Initialize Job').first().json.jobId;\n\nif (staticData.jobs && staticData.jobs[jobId]) {\n  staticData.jobs[jobId].phase = 'extracting';\n  staticData.jobs[jobId].progress = 5;\n  staticData.jobs[jobId].message = 'Извличане на текст от документите...';\n}\n\nreturn $input.all();"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "extract-pdf",
+      "name": "Extract from PDF",
+      "type": "n8n-nodes-base.extractFromFile",
+      "position": [660, 440],
+      "parameters": {
+        "operation": "pdf",
+        "options": {}
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "merge-texts",
+      "name": "Merge Extracted Texts",
+      "type": "n8n-nodes-base.code",
+      "position": [880, 440],
+      "parameters": {
+        "jsCode": "// Merge all extracted text from PDF files\nconst items = $input.all();\nconst allTexts = [];\n\nfor (const item of items) {\n  const text = item.json.text || item.json.data || '';\n  if (text) {\n    allTexts.push(text);\n  }\n}\n\n// Try to separate procurement docs from tech spec\n// The user uploads: procurement docs + tech spec separately\n// For now, merge all into one procurement_text\nconst fullText = allTexts.join('\\n\\n--- НОВА СТРАНИЦА ---\\n\\n');\n\nconst jobId = $('Initialize Job').first().json.jobId;\nconst contractorInfo = $('Initialize Job').first().json.contractorInfo;\n\nreturn [{\n  json: {\n    jobId: jobId,\n    contractorInfo: contractorInfo,\n    fullText: fullText,\n    documentCount: items.length,\n    totalCharacters: fullText.length\n  }\n}];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "update-phase-requirements",
+      "name": "Update Phase: Requirements",
+      "type": "n8n-nodes-base.code",
+      "position": [1100, 440],
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nconst jobId = $json.jobId;\n\nif (staticData.jobs && staticData.jobs[jobId]) {\n  staticData.jobs[jobId].phase = 'requirements';\n  staticData.jobs[jobId].progress = 10;\n  staticData.jobs[jobId].message = 'Извличане на изисквания от документацията...';\n}\n\nreturn $input.all();"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "llm-extract-requirements",
+      "name": "Extract Requirements",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "position": [1320, 440],
+      "parameters": {
+        "text": "=ИНСТРУКЦИИ:\n\nТи си експерт по българско законодателство за обществени поръчки (ЗОП, ППЗОП). Задачата ти е да извлечеш ВСИЧКИ изисквания за техническото предложение от предоставената документация.\n\nКакво да извлечеш:\n1. Основни критерии за оценка — номерираните изисквания, които участникът трябва да адресира\n2. Подточки — ако изискването казва \"опишете X, включително а), б), в)\" — извлечи всяка подточка отделно\n3. Специфични инструкции — лимит на страници, формат, задължителни приложения\n4. Методика на оценяване — как се оценява всяка точка, какво дава максимум точки\n5. Кръстосани препратки — ако документацията казва \"виж Техническата спецификация за X\"\n\nВърни структуриран JSON отговор с тази схема:\n{\n  \"proposal_type\": \"Техническо предложение | Работна програма | Концепция\",\n  \"procurement_subject\": \"Пълно наименование на поръчката\",\n  \"contracting_authority\": \"Име на Възложителя\",\n  \"requirements\": [\n    {\n      \"id\": \"1\",\n      \"title\": \"Точното заглавие на изискването\",\n      \"full_text\": \"Пълният, дословен текст на изискването\",\n      \"sub_requirements\": [{\"id\": \"1.1\", \"text\": \"Дословен текст\"}],\n      \"scoring\": {\"max_points\": 100, \"scoring_criteria\": \"Описание\", \"disqualification_risks\": \"\"}\n    }\n  ],\n  \"format_requirements\": {\"page_limit\": null, \"mandatory_attachments\": [], \"special_instructions\": []},\n  \"references_to_spec\": []\n}\n\nКритични правила:\n- ДОСЛОВНО извличане — копирай текста ТОЧНО както е написан\n- ПЪЛНО извличане — пропускането на дори една подточка може да доведе до дисквалификация\n- ЗАПАЗИ номерацията — запази оригиналната номерация от документацията\n- Всичко на БЪЛГАРСКИ\n\nДОКУМЕНТАЦИЯ ЗА АНАЛИЗ:\n\n{{ $json.fullText }}",
+        "promptType": "define",
+        "messages": {
+          "messageValues": [
+            {
+              "type": "system",
+              "message": "You are an expert in Bulgarian public procurement law (ЗОП, ППЗОП). You extract requirements with surgical precision. You NEVER miss a sub-requirement. You ALWAYS output valid JSON. Language: Bulgarian."
+            }
+          ]
+        }
+      },
+      "typeVersion": 1.4
+    },
+    {
+      "id": "model-sonnet-requirements",
+      "name": "Claude Sonnet - Requirements",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "position": [1240, 660],
+      "parameters": {
+        "model": "anthropic/claude-sonnet-4-20250514",
+        "options": {
+          "baseURL": "https://openrouter.ai/api/v1",
+          "maxTokens": 16000,
+          "temperature": 0.1
+        }
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "OPENROUTER_CREDENTIAL_ID",
+          "name": "OpenRouter API"
+        }
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "parse-requirements",
+      "name": "Parse Requirements JSON",
+      "type": "n8n-nodes-base.code",
+      "position": [1540, 440],
+      "parameters": {
+        "jsCode": "const response = $json.text || $json.response || '';\n\n// Try to extract JSON from the response\nlet requirements;\ntry {\n  // Try direct parse first\n  requirements = JSON.parse(response);\n} catch (e) {\n  // Try to extract JSON from markdown code blocks\n  const jsonMatch = response.match(/```(?:json)?\\s*([\\s\\S]*?)```/);\n  if (jsonMatch) {\n    try {\n      requirements = JSON.parse(jsonMatch[1].trim());\n    } catch (e2) {\n      // Last resort: try to find JSON object\n      const objMatch = response.match(/\\{[\\s\\S]*\\}/);\n      if (objMatch) {\n        requirements = JSON.parse(objMatch[0]);\n      } else {\n        throw new Error('Could not parse requirements JSON from LLM response');\n      }\n    }\n  } else {\n    const objMatch = response.match(/\\{[\\s\\S]*\\}/);\n    if (objMatch) {\n      requirements = JSON.parse(objMatch[0]);\n    } else {\n      throw new Error('Could not parse requirements JSON from LLM response');\n    }\n  }\n}\n\nconst jobId = $('Initialize Job').first().json.jobId;\nconst contractorInfo = $('Initialize Job').first().json.contractorInfo;\nconst fullText = $('Merge Extracted Texts').first().json.fullText;\n\nreturn [{\n  json: {\n    jobId: jobId,\n    contractorInfo: contractorInfo,\n    fullText: fullText,\n    requirements: requirements\n  }\n}];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "update-phase-spec",
+      "name": "Update Phase: Spec Analysis",
+      "type": "n8n-nodes-base.code",
+      "position": [1760, 440],
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nconst jobId = $json.jobId;\n\nif (staticData.jobs && staticData.jobs[jobId]) {\n  staticData.jobs[jobId].phase = 'spec_analysis';\n  staticData.jobs[jobId].progress = 20;\n  staticData.jobs[jobId].message = 'Анализ на техническата спецификация...';\n}\n\nreturn $input.all();"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "llm-analyze-spec",
+      "name": "Analyze Spec",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "position": [1980, 440],
+      "parameters": {
+        "text": "=ИНСТРУКЦИИ:\n\nТи си експерт-технически анализатор за обществени поръчки в България. Задачата ти е да анализираш текста на документацията/техническата спецификация и да извлечеш цялата конкретна информация, нужна за писане на техническото предложение.\n\nКакво да извлечеш:\n1. Описание на обекта — какво точно се строи/доставя/проектира\n2. Местоположение — адрес, община, специфики на терена\n3. Обхват на работите — дейности, фази, резултати\n4. Технически параметри — материали, стандарти, размери, количества\n5. Изисквания за качество — стандарти, сертификати, изпитвания\n6. Времеви рамки — срокове, фази, етапи\n7. Изисквания за персонал — специалисти, квалификации\n8. Изисквания за оборудване — машини, инструменти\n9. Нормативна рамка — закони, наредби, стандарти\n10. Екологични изисквания, ЗБУТ, гаранции, ограничения\n\nВърни структуриран JSON:\n{\n  \"object\": {\"type\": \"\", \"name\": \"\", \"description\": \"\", \"location\": \"\", \"category\": \"\"},\n  \"scope_of_work\": [{\"phase\": \"\", \"activities\": [], \"deliverables\": []}],\n  \"technical_parameters\": [{\"category\": \"\", \"parameter\": \"\", \"value\": \"\", \"standard\": \"\"}],\n  \"personnel_requirements\": [{\"role\": \"\", \"qualifications\": \"\", \"experience\": \"\"}],\n  \"equipment_requirements\": [{\"type\": \"\", \"specifications\": \"\"}],\n  \"regulatory_framework\": [],\n  \"quality_standards\": [],\n  \"environmental_requirements\": [],\n  \"safety_requirements\": [],\n  \"warranty_periods\": [{\"type\": \"\", \"period\": \"\", \"reference\": \"\"}],\n  \"timeline\": {\"total_duration\": \"\", \"phases\": [], \"milestones\": []},\n  \"constraints\": [],\n  \"key_quantities\": [{\"item\": \"\", \"quantity\": \"\", \"unit\": \"\"}]\n}\n\nПравила:\n- Извличай САМО факти — не интерпретирай\n- Бъди КОНКРЕТЕН — \"бетон C20/25\" а не \"качествен бетон\"\n- Запази единици и стойности\n- Отбележи липсващи данни\n- Всичко на БЪЛГАРСКИ\n\nДОКУМЕНТАЦИЯ:\n\n{{ $json.fullText }}",
+        "promptType": "define",
+        "messages": {
+          "messageValues": [
+            {
+              "type": "system",
+              "message": "You are an expert technical analyst for Bulgarian public procurement. You extract ONLY concrete, verifiable facts. You output valid JSON. Language: Bulgarian."
+            }
+          ]
+        }
+      },
+      "typeVersion": 1.4
+    },
+    {
+      "id": "model-sonnet-spec",
+      "name": "Claude Sonnet - Spec",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "position": [1900, 660],
+      "parameters": {
+        "model": "anthropic/claude-sonnet-4-20250514",
+        "options": {
+          "baseURL": "https://openrouter.ai/api/v1",
+          "maxTokens": 16000,
+          "temperature": 0.1
+        }
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "OPENROUTER_CREDENTIAL_ID",
+          "name": "OpenRouter API"
+        }
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "parse-spec",
+      "name": "Parse Spec JSON",
+      "type": "n8n-nodes-base.code",
+      "position": [2200, 440],
+      "parameters": {
+        "jsCode": "const response = $json.text || $json.response || '';\nlet specData;\ntry {\n  specData = JSON.parse(response);\n} catch (e) {\n  const jsonMatch = response.match(/```(?:json)?\\s*([\\s\\S]*?)```/);\n  if (jsonMatch) {\n    specData = JSON.parse(jsonMatch[1].trim());\n  } else {\n    const objMatch = response.match(/\\{[\\s\\S]*\\}/);\n    if (objMatch) {\n      specData = JSON.parse(objMatch[0]);\n    } else {\n      throw new Error('Could not parse spec JSON');\n    }\n  }\n}\n\nconst prev = $('Parse Requirements JSON').first().json;\n\nreturn [{\n  json: {\n    jobId: prev.jobId,\n    contractorInfo: prev.contractorInfo,\n    fullText: prev.fullText,\n    requirements: prev.requirements,\n    specData: specData\n  }\n}];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "update-phase-plan",
+      "name": "Update Phase: Planning",
+      "type": "n8n-nodes-base.code",
+      "position": [2420, 440],
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nconst jobId = $json.jobId;\n\nif (staticData.jobs && staticData.jobs[jobId]) {\n  staticData.jobs[jobId].phase = 'planning';\n  staticData.jobs[jobId].progress = 30;\n  staticData.jobs[jobId].message = 'Планиране на структурата на документа...';\n}\n\nreturn $input.all();"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "llm-plan-document",
+      "name": "Plan Document",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "position": [2640, 440],
+      "parameters": {
+        "text": "=ИНСТРУКЦИИ:\n\nТи си експерт по структуриране на технически предложения за обществени поръчки в България.\n\nПолучаваш:\n1. ИЗВЛЕЧЕНИ ИЗИСКВАНИЯ:\n{{ JSON.stringify($json.requirements, null, 2) }}\n\n2. АНАЛИЗ НА СПЕЦИФИКАЦИЯТА:\n{{ JSON.stringify($json.specData, null, 2) }}\n\n3. ИНФОРМАЦИЯ ЗА ИЗПЪЛНИТЕЛЯ:\n{{ JSON.stringify($json.contractorInfo, null, 2) }}\n\nСъздай детайлен план на документа, който гарантира 100% покритие на ВСЯКО изискване.\n\nПравила:\n- Една секция за всяко изискване\n- Подсекции за подизисквания\n- Логичен поток: общо → конкретно → оперативно → контрол\n- Реалистичен обем (50-100 страници общо)\n- Конкретни указания за съдържанието на всяка секция\n- Идентифицирай нужните таблици\n- Отбележи къде ще са нужни placeholders\n\nВърни JSON:\n{\n  \"document_title\": \"ТЕХНИЧЕСКО ПРЕДЛОЖЕНИЕ за [тема]\",\n  \"total_estimated_pages\": 75,\n  \"sections\": [\n    {\n      \"id\": \"1\",\n      \"title\": \"Заглавие на секцията\",\n      \"requirement_id\": \"1\",\n      \"estimated_pages\": 10,\n      \"subsections\": [\n        {\n          \"id\": \"1.1\",\n          \"title\": \"Заглавие\",\n          \"requirement_id\": \"1.1\",\n          \"estimated_pages\": 3,\n          \"content_guidance\": [\"Конкретни указания какво да се напише\"],\n          \"spec_data_to_use\": [\"Кои данни от спецификацията да се използват\"],\n          \"tables_needed\": [{\"title\": \"\", \"columns\": []}],\n          \"placeholders_expected\": [\"Какви placeholders ще са нужни\"]\n        }\n      ]\n    }\n  ],\n  \"appendices\": [{\"title\": \"\", \"description\": \"\"}]\n}\n\n100% покритие — всяко изискване и подизискване ТРЯБВА да е в плана.",
+        "promptType": "define",
+        "messages": {
+          "messageValues": [
+            {
+              "type": "system",
+              "message": "You are an expert in structuring technical proposals for Bulgarian public procurement. You create comprehensive document plans with 100% requirement coverage. Output valid JSON. Language: Bulgarian."
+            }
+          ]
+        }
+      },
+      "typeVersion": 1.4
+    },
+    {
+      "id": "model-sonnet-plan",
+      "name": "Claude Sonnet - Planner",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "position": [2560, 660],
+      "parameters": {
+        "model": "anthropic/claude-sonnet-4-20250514",
+        "options": {
+          "baseURL": "https://openrouter.ai/api/v1",
+          "maxTokens": 16000,
+          "temperature": 0.2
+        }
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "OPENROUTER_CREDENTIAL_ID",
+          "name": "OpenRouter API"
+        }
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "parse-plan",
+      "name": "Parse Plan JSON",
+      "type": "n8n-nodes-base.code",
+      "position": [2860, 440],
+      "parameters": {
+        "jsCode": "const response = $json.text || $json.response || '';\nlet documentPlan;\ntry {\n  documentPlan = JSON.parse(response);\n} catch (e) {\n  const jsonMatch = response.match(/```(?:json)?\\s*([\\s\\S]*?)```/);\n  if (jsonMatch) {\n    documentPlan = JSON.parse(jsonMatch[1].trim());\n  } else {\n    const objMatch = response.match(/\\{[\\s\\S]*\\}/);\n    if (objMatch) {\n      documentPlan = JSON.parse(objMatch[0]);\n    } else {\n      throw new Error('Could not parse document plan JSON');\n    }\n  }\n}\n\nconst prev = $('Parse Spec JSON').first().json;\n\nreturn [{\n  json: {\n    jobId: prev.jobId,\n    contractorInfo: prev.contractorInfo,\n    fullText: prev.fullText,\n    requirements: prev.requirements,\n    specData: prev.specData,\n    documentPlan: documentPlan\n  }\n}];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "update-phase-writing",
+      "name": "Update Phase: Writing",
+      "type": "n8n-nodes-base.code",
+      "position": [3080, 440],
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nconst jobId = $json.jobId;\n\nif (staticData.jobs && staticData.jobs[jobId]) {\n  staticData.jobs[jobId].phase = 'writing';\n  staticData.jobs[jobId].progress = 35;\n  staticData.jobs[jobId].message = 'Генериране на секциите на документа...';\n}\n\n// Prepare sections for sequential writing\nconst plan = $json.documentPlan;\nconst sections = plan.sections || [];\n\n// We'll write all sections in one LLM call with the full plan\nreturn $input.all();"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "llm-write-sections",
+      "name": "Write All Sections",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "position": [3300, 440],
+      "parameters": {
+        "text": "=СИСТЕМНИ ИНСТРУКЦИИ:\n\nТи си експерт по изготвяне на технически предложения за обществени поръчки в България. Притежаваш задълбочени познания по ЗОП, ППЗОП, ЗУТ, и всички приложими нормативни актове.\n\nПише професионален, конкретен и технически издържан текст на БЪЛГАРСКИ ЕЗИК.\n\n## ДАННИ ЗА ИЗПЪЛНИТЕЛЯ:\n{{ JSON.stringify($json.contractorInfo, null, 2) }}\n\n## ИЗВЛЕЧЕНИ ИЗИСКВАНИЯ:\n{{ JSON.stringify($json.requirements, null, 2) }}\n\n## ДАННИ ОТ ТЕХНИЧЕСКАТА СПЕЦИФИКАЦИЯ:\n{{ JSON.stringify($json.specData, null, 2) }}\n\n## ПЛАН НА ДОКУМЕНТА:\n{{ JSON.stringify($json.documentPlan, null, 2) }}\n\n## ПРАВИЛА ЗА ПИСАНЕ:\n\n### ЗАДЪЛЖИТЕЛНО:\n1. КОНКРЕТНОСТ — всяко твърдение ТРЯБВА да е обвързано с конкретната поръчка и техническата спецификация\n2. Структура КАКВО-КАК-С КАКВО-КОЙ-КОНТРОЛ за всяка дейност\n3. Нормативни препратки — ЗУТ (чл. и ал.), Наредба №3/2003, Наредба №2/2003, Наредба №РД-07-2/2009, БДС EN стандарти\n4. Markdown таблици за организационни структури, оборудване, графици, материали\n5. Спазвай указания обем (1 стр ≈ 350-400 думи)\n\n### ЗАБРАНЕНО:\n1. Общи фрази без конкретика: НЕ \"ще осигурим високо качество\" → ДА \"ще осигурим качество чрез ежедневен контрол на бетоновите смеси, вземане на проби съгласно БДС EN 12350\"\n2. Текст, приложим за всяка поръчка без промени\n3. Измислени данни — ако не знаеш нещо конкретно, ЗАДЪЛЖИТЕЛНО постави placeholder: [⚠️ ПОПЪЛНЕТЕ: описание]\n4. Повторения между секциите\n5. Празни обещания без механизъм за изпълнение\n\n### ФОРМАТ НА PLACEHOLDERS:\n[⚠️ ПОПЪЛНЕТЕ: {Категория} - {Описание}]\n\nКатегории: ПЕРСОНАЛ, ОБОРУДВАНЕ, ОПИТ, СРОК, ДОКУМЕНТ, ФИРМА, ПОДИЗПЪЛНИТЕЛ, КОЛИЧЕСТВО\n\nПримери:\n- [⚠️ ПОПЪЛНЕТЕ: ПЕРСОНАЛ - Трите имена на Техническия ръководител]\n- [⚠️ ПОПЪЛНЕТЕ: ОБОРУДВАНЕ - Марка и модел на мобилна бетонпомпа]\n- [⚠️ ПОПЪЛНЕТЕ: ОПИТ - Наименование и РЗП на подобен завършен обект]\n\n## ЗАДАЧА:\nНапиши ПЪЛНИЯ текст на ВСИЧКИ секции от плана. Следвай точно структурата на плана.\nВсяка секция да започва с номерация и заглавие.\nВърни чист Markdown текст, готов за документ.",
+        "promptType": "define",
+        "messages": {
+          "messageValues": [
+            {
+              "type": "system",
+              "message": "Ти си експерт по технически предложения за обществени поръчки в България. Пишеш на професионален български. Никога не пишеш общи фрази. Всяко изречение е конкретно и обвързано с поръчката. Спазваш структура КАКВО-КАК-С КАКВО-КОЙ-КОНТРОЛ."
+            }
+          ]
+        }
+      },
+      "typeVersion": 1.4
+    },
+    {
+      "id": "model-sonnet-writer",
+      "name": "Claude Sonnet - Writer",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "position": [3220, 660],
+      "parameters": {
+        "model": "anthropic/claude-sonnet-4-20250514",
+        "options": {
+          "baseURL": "https://openrouter.ai/api/v1",
+          "maxTokens": 64000,
+          "temperature": 0.3
+        }
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "OPENROUTER_CREDENTIAL_ID",
+          "name": "OpenRouter API"
+        }
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "save-draft",
+      "name": "Save Draft Text",
+      "type": "n8n-nodes-base.code",
+      "position": [3520, 440],
+      "parameters": {
+        "jsCode": "const draftText = $json.text || $json.response || '';\nconst prev = $('Parse Plan JSON').first().json;\n\nreturn [{\n  json: {\n    jobId: prev.jobId,\n    contractorInfo: prev.contractorInfo,\n    requirements: prev.requirements,\n    specData: prev.specData,\n    documentPlan: prev.documentPlan,\n    draftText: draftText,\n    attempt: 1\n  }\n}];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "update-phase-validation",
+      "name": "Update Phase: Validation",
+      "type": "n8n-nodes-base.code",
+      "position": [3740, 440],
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nconst jobId = $json.jobId;\n\nif (staticData.jobs && staticData.jobs[jobId]) {\n  staticData.jobs[jobId].phase = 'validation';\n  staticData.jobs[jobId].progress = 60;\n  staticData.jobs[jobId].message = 'Проверка за пълнота и релевантност (опит ' + $json.attempt + '/3)...';\n}\n\nreturn $input.all();"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "llm-completeness-check",
+      "name": "Completeness Check",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "position": [3960, 440],
+      "parameters": {
+        "text": "=ЗАДАЧА: Проверка за пълнота на техническо предложение.\n\nТи си строг одитор на качеството. Задачата ти е да провериш дали ВСЯКО изискване от документацията е напълно и задълбочено адресирано в написания текст.\n\nИЗИСКВАНИЯ ОТ ДОКУМЕНТАЦИЯТА:\n{{ JSON.stringify($json.requirements, null, 2) }}\n\nНАПИСАН ТЕКСТ:\n{{ $json.draftText.substring(0, 50000) }}\n\nЗа ВСЯКО изискване и подизискване провери:\n1. ПРИСЪСТВИЕ — адресирано ли е в текста?\n2. ДЪЛБОЧИНА — с достатъчно детайли ли е, или само е споменато?\n3. КОНКРЕТНОСТ — съдържа ли проектно-специфична информация?\n4. ПЪЛНОТА — всички ли аспекти на изискването са покрити?\n\nВърни JSON:\n{\n  \"overall_verdict\": \"PASS\" или \"FAIL\",\n  \"coverage_score\": 0-100,\n  \"checks\": [\n    {\n      \"requirement_id\": \"1.1\",\n      \"status\": \"PASS\" или \"FAIL\" или \"PARTIAL\",\n      \"issues\": [],\n      \"missing_content\": \"\"\n    }\n  ],\n  \"critical_gaps\": [],\n  \"rewrite_instructions\": \"Конкретни инструкции какво да се поправи (ако FAIL)\"\n}\n\nПравила:\n- НУЛЕВА ТОЛЕРАНТНОСТ — ако дори ЕДНА подточка липсва, вердиктът е FAIL\n- Общ текст = FAIL — текст, приложим за всяка поръчка без промяна, е неприемлив\n- Бъди СТРОГ — по-добре фалшив позитив, отколкото пропусната празнина\n- При FAIL — rewrite_instructions трябва да са достатъчно конкретни за поправка",
+        "promptType": "define",
+        "messages": {
+          "messageValues": [
+            {
+              "type": "system",
+              "message": "You are a zero-tolerance quality auditor for Bulgarian public procurement proposals. You verify every requirement is fully addressed. You output valid JSON. You are strict - missing any sub-point = FAIL."
+            }
+          ]
+        }
+      },
+      "typeVersion": 1.4
+    },
+    {
+      "id": "model-opus-completeness",
+      "name": "Claude Opus - Completeness",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "position": [3880, 660],
+      "parameters": {
+        "model": "anthropic/claude-opus-4-20250514",
+        "options": {
+          "baseURL": "https://openrouter.ai/api/v1",
+          "maxTokens": 8000,
+          "temperature": 0.1
+        }
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "OPENROUTER_CREDENTIAL_ID",
+          "name": "OpenRouter API"
+        }
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "parse-completeness",
+      "name": "Parse Completeness Result",
+      "type": "n8n-nodes-base.code",
+      "position": [4180, 440],
+      "parameters": {
+        "jsCode": "const response = $json.text || $json.response || '';\nlet completenessResult;\ntry {\n  completenessResult = JSON.parse(response);\n} catch (e) {\n  const jsonMatch = response.match(/```(?:json)?\\s*([\\s\\S]*?)```/);\n  if (jsonMatch) {\n    completenessResult = JSON.parse(jsonMatch[1].trim());\n  } else {\n    const objMatch = response.match(/\\{[\\s\\S]*\\}/);\n    if (objMatch) {\n      completenessResult = JSON.parse(objMatch[0]);\n    } else {\n      // If can't parse, assume PASS to avoid infinite loops\n      completenessResult = { overall_verdict: 'PASS', coverage_score: 75 };\n    }\n  }\n}\n\nconst prev = $('Save Draft Text').first().json;\n\nreturn [{\n  json: {\n    ...prev,\n    completenessResult: completenessResult\n  }\n}];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "llm-relevance-check",
+      "name": "Relevance Check",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "position": [4400, 440],
+      "parameters": {
+        "text": "=ЗАДАЧА: Проверка за релевантност на техническо предложение.\n\nТи си специалист по оценка на технически предложения. Идентифицирай текст, който е:\n1. Прекалено общ (приложим за всеки проект)\n2. Нерелевантен за конкретната поръчка\n3. Copy-paste шаблон\n4. Фактически несъответстващ на техническата спецификация\n\nДАННИ ОТ СПЕЦИФИКАЦИЯТА:\n{{ JSON.stringify($json.specData, null, 2) }}\n\nНАПИСАН ТЕКСТ (първите 50000 символа):\n{{ $json.draftText.substring(0, 50000) }}\n\nЗа ВСЕКИ параграф задай 4 въпроса:\n1. Може ли да се използва в ДРУГА поръчка без промяна? → GENERIC\n2. Пряко свързан ли е с ТАЗИ конкретна поръчка? → ако не → IRRELEVANT\n3. Противоречи ли на факти от спецификацията? → INCONSISTENT\n4. Шаблонен ли е? → BOILERPLATE\n\nВърни JSON:\n{\n  \"overall_verdict\": \"PASS\" или \"FAIL\",\n  \"relevance_score\": 0-100,\n  \"flagged_paragraphs\": [\n    {\n      \"paragraph_number\": 1,\n      \"issue_type\": \"GENERIC | IRRELEVANT | INCONSISTENT | BOILERPLATE\",\n      \"explanation\": \"\",\n      \"suggestion\": \"\"\n    }\n  ],\n  \"consistency_issues\": [],\n  \"rewrite_instructions\": \"Инструкции за подобряване (ако FAIL)\"\n}\n\nВердикт PASS ако score ≥ 80% и нямя IRRELEVANT или INCONSISTENT параграфи.\nВердикт FAIL ако има IRRELEVANT/INCONSISTENT съдържание или над 20% GENERIC текст.",
+        "promptType": "define",
+        "messages": {
+          "messageValues": [
+            {
+              "type": "system",
+              "message": "You are a ruthless evaluator of technical proposals. You detect generic, irrelevant, and boilerplate text with extreme precision. You cross-reference with the technical specification. Output valid JSON."
+            }
+          ]
+        }
+      },
+      "typeVersion": 1.4
+    },
+    {
+      "id": "model-gemini-relevance",
+      "name": "Gemini - Relevance",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "position": [4320, 660],
+      "parameters": {
+        "model": "google/gemini-2.5-pro",
+        "options": {
+          "baseURL": "https://openrouter.ai/api/v1",
+          "maxTokens": 8000,
+          "temperature": 0.1
+        }
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "OPENROUTER_CREDENTIAL_ID",
+          "name": "OpenRouter API"
+        }
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "parse-relevance",
+      "name": "Parse Relevance Result",
+      "type": "n8n-nodes-base.code",
+      "position": [4620, 440],
+      "parameters": {
+        "jsCode": "const response = $json.text || $json.response || '';\nlet relevanceResult;\ntry {\n  relevanceResult = JSON.parse(response);\n} catch (e) {\n  const jsonMatch = response.match(/```(?:json)?\\s*([\\s\\S]*?)```/);\n  if (jsonMatch) {\n    relevanceResult = JSON.parse(jsonMatch[1].trim());\n  } else {\n    const objMatch = response.match(/\\{[\\s\\S]*\\}/);\n    if (objMatch) {\n      relevanceResult = JSON.parse(objMatch[0]);\n    } else {\n      relevanceResult = { overall_verdict: 'PASS', relevance_score: 75 };\n    }\n  }\n}\n\nconst prev = $('Parse Completeness Result').first().json;\n\nreturn [{\n  json: {\n    ...prev,\n    relevanceResult: relevanceResult\n  }\n}];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "check-validation",
+      "name": "Validation Passed?",
+      "type": "n8n-nodes-base.if",
+      "position": [4840, 440],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "combinator": "or",
+          "conditions": [
+            {
+              "id": "cond1",
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              },
+              "leftValue": "={{ $json.completenessResult.overall_verdict === 'PASS' && $json.relevanceResult.overall_verdict === 'PASS' }}",
+              "rightValue": ""
+            },
+            {
+              "id": "cond2",
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              },
+              "leftValue": "={{ $json.attempt }}",
+              "rightValue": 3
+            }
+          ]
+        }
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "rewrite-with-feedback",
+      "name": "Rewrite with Feedback",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "position": [5100, 640],
+      "parameters": {
+        "text": "=ЗАДАЧА: Пренапиши техническото предложение с корекции.\n\nОРИГИНАЛЕН ТЕКСТ:\n{{ $json.draftText.substring(0, 40000) }}\n\nОБРАТНА ВРЪЗКА ОТ ПРОВЕРКА ЗА ПЪЛНОТА:\n{{ JSON.stringify($json.completenessResult, null, 2) }}\n\nОБРАТНА ВРЪЗКА ОТ ПРОВЕРКА ЗА РЕЛЕВАНТНОСТ:\n{{ JSON.stringify($json.relevanceResult, null, 2) }}\n\nИЗИСКВАНИЯ:\n{{ JSON.stringify($json.requirements, null, 2) }}\n\nДАННИ ОТ СПЕЦИФИКАЦИЯТА:\n{{ JSON.stringify($json.specData, null, 2) }}\n\nИНСТРУКЦИИ:\n1. Поправи ВСИЧКИ идентифицирани проблеми\n2. Добави липсващо съдържание за непокрити изисквания\n3. Замени общите фрази с конкретни, проектно-специфични\n4. Коригирай несъответствията със спецификацията\n5. Запази всички placeholders [⚠️ ПОПЪЛНЕТЕ: ...]\n6. НЕ съкращавай — запази или увеличи обема\n\nВърни ПЪЛНИЯ пренаписан документ като Markdown.",
+        "promptType": "define",
+        "messages": {
+          "messageValues": [
+            {
+              "type": "system",
+              "message": "Ти си експерт по технически предложения за обществени поръчки. Получаваш обратна връзка от одитори и пренаписваш текста с корекции. Бъди конкретен и проектно-специфичен."
+            }
+          ]
+        }
+      },
+      "typeVersion": 1.4
+    },
+    {
+      "id": "model-sonnet-rewrite",
+      "name": "Claude Sonnet - Rewrite",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "position": [5020, 860],
+      "parameters": {
+        "model": "anthropic/claude-sonnet-4-20250514",
+        "options": {
+          "baseURL": "https://openrouter.ai/api/v1",
+          "maxTokens": 64000,
+          "temperature": 0.3
+        }
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "OPENROUTER_CREDENTIAL_ID",
+          "name": "OpenRouter API"
+        }
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "update-draft-after-rewrite",
+      "name": "Update Draft After Rewrite",
+      "type": "n8n-nodes-base.code",
+      "position": [5320, 640],
+      "parameters": {
+        "jsCode": "const rewrittenText = $json.text || $json.response || '';\nconst prev = $('Parse Relevance Result').first().json;\n\n// Increment attempt counter\nreturn [{\n  json: {\n    jobId: prev.jobId,\n    contractorInfo: prev.contractorInfo,\n    requirements: prev.requirements,\n    specData: prev.specData,\n    documentPlan: prev.documentPlan,\n    draftText: rewrittenText,\n    attempt: (prev.attempt || 1) + 1\n  }\n}];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "update-phase-finalizing",
+      "name": "Update Phase: Finalizing",
+      "type": "n8n-nodes-base.code",
+      "position": [5100, 300],
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nconst jobId = $json.jobId;\n\nif (staticData.jobs && staticData.jobs[jobId]) {\n  staticData.jobs[jobId].phase = 'finalizing';\n  staticData.jobs[jobId].progress = 75;\n  staticData.jobs[jobId].message = 'Финална редакция на документа...';\n}\n\nreturn $input.all();"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "llm-final-edit",
+      "name": "Final Edit",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "position": [5320, 300],
+      "parameters": {
+        "text": "=ЗАДАЧА: Финална редакция на техническо предложение.\n\nТи си главен редактор. Извърши финална редакция на документа.\n\n## Задачи:\n\n### 1. Кохерентност\n- Провери логичния поток между секциите\n- Премахни противоречия\n- Осигури еднаква терминология\n- Провери коректността на препратките между секции\n\n### 2. Повторения\n- Идентифицирай параграфи, казващи едно и също в различни секции\n- Остави подробното описание на едно място, на другите — препратка\n\n### 3. Езикова редакция\n- Правопис и граматика на български\n- Професионален, официален стил\n- Кратки, ясни изречения\n- Единно форматиране на нормативни препратки\n\n### 4. Форматиране\n- Проверка на номерацията\n- Проверка на таблиците\n- Markdown форматиране\n\n### 5. Placeholders\n- Всички [⚠️ ПОПЪЛНЕТЕ: ...] маркери да са ясни и конкретни\n- Няма скрити пропуски\n\n## Правила:\n- НЕ добавяй ново съдържание\n- НЕ премахвай съдържание (само ясни повторения)\n- Запази всички placeholders\n- Бъди консервативен\n\nДОКУМЕНТ:\n{{ $json.draftText }}",
+        "promptType": "define",
+        "messages": {
+          "messageValues": [
+            {
+              "type": "system",
+              "message": "Ти си главен редактор на технически предложения. Извършваш финална редакция — кохерентност, повторения, граматика, форматиране. НЕ добавяш ново съдържание. Запазваш всички placeholders."
+            }
+          ]
+        }
+      },
+      "typeVersion": 1.4
+    },
+    {
+      "id": "model-opus-final",
+      "name": "Claude Opus - Final Edit",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "position": [5240, 520],
+      "parameters": {
+        "model": "anthropic/claude-opus-4-20250514",
+        "options": {
+          "baseURL": "https://openrouter.ai/api/v1",
+          "maxTokens": 64000,
+          "temperature": 0.1
+        }
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "OPENROUTER_CREDENTIAL_ID",
+          "name": "OpenRouter API"
+        }
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "prepare-final-result",
+      "name": "Prepare Final Result",
+      "type": "n8n-nodes-base.code",
+      "position": [5540, 300],
+      "parameters": {
+        "jsCode": "const finalText = $json.text || $json.response || '';\nconst prev = $('Validation Passed?').first().json || $('Parse Relevance Result').first().json;\n\n// Count words and placeholders\nconst wordCount = finalText.split(/\\s+/).length;\nconst placeholders = (finalText.match(/\\[⚠️ ПОПЪЛНЕТЕ:/g) || []).length;\nconst estimatedPages = Math.ceil(wordCount / 375);\n\n// Count sections\nconst sections = (finalText.match(/^#{1,3}\\s/gm) || []).length;\n\nconst jobId = prev.jobId;\n\n// Update job status to completed\nconst staticData = $getWorkflowStaticData('global');\nif (staticData.jobs && staticData.jobs[jobId]) {\n  staticData.jobs[jobId].status = 'completed';\n  staticData.jobs[jobId].phase = 'completed';\n  staticData.jobs[jobId].progress = 100;\n  staticData.jobs[jobId].message = 'Документът е готов!';\n  staticData.jobs[jobId].completedAt = new Date().toISOString();\n  staticData.jobs[jobId].result = {\n    text: finalText,\n    stats: {\n      wordCount: wordCount,\n      estimatedPages: estimatedPages,\n      placeholders: placeholders,\n      sections: sections\n    }\n  };\n}\n\nreturn [{\n  json: {\n    jobId: jobId,\n    finalText: finalText,\n    stats: {\n      wordCount: wordCount,\n      estimatedPages: estimatedPages,\n      placeholders: placeholders,\n      sections: sections\n    }\n  }\n}];"
+      },
+      "typeVersion": 2
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Initialize Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Initialize Job": {
+      "main": [
+        [
+          {
+            "node": "Respond with Job ID",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Update Phase: Extract",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Phase: Extract": {
+      "main": [
+        [
+          {
+            "node": "Extract from PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from PDF": {
+      "main": [
+        [
+          {
+            "node": "Merge Extracted Texts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Extracted Texts": {
+      "main": [
+        [
+          {
+            "node": "Update Phase: Requirements",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Phase: Requirements": {
+      "main": [
+        [
+          {
+            "node": "Extract Requirements",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Sonnet - Requirements": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Extract Requirements",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Requirements": {
+      "main": [
+        [
+          {
+            "node": "Parse Requirements JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Requirements JSON": {
+      "main": [
+        [
+          {
+            "node": "Update Phase: Spec Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Phase: Spec Analysis": {
+      "main": [
+        [
+          {
+            "node": "Analyze Spec",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Sonnet - Spec": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Analyze Spec",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Spec": {
+      "main": [
+        [
+          {
+            "node": "Parse Spec JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Spec JSON": {
+      "main": [
+        [
+          {
+            "node": "Update Phase: Planning",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Phase: Planning": {
+      "main": [
+        [
+          {
+            "node": "Plan Document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Sonnet - Planner": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Plan Document",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Plan Document": {
+      "main": [
+        [
+          {
+            "node": "Parse Plan JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Plan JSON": {
+      "main": [
+        [
+          {
+            "node": "Update Phase: Writing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Phase: Writing": {
+      "main": [
+        [
+          {
+            "node": "Write All Sections",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Sonnet - Writer": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Write All Sections",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write All Sections": {
+      "main": [
+        [
+          {
+            "node": "Save Draft Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Draft Text": {
+      "main": [
+        [
+          {
+            "node": "Update Phase: Validation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Phase: Validation": {
+      "main": [
+        [
+          {
+            "node": "Completeness Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Opus - Completeness": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Completeness Check",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Completeness Check": {
+      "main": [
+        [
+          {
+            "node": "Parse Completeness Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Completeness Result": {
+      "main": [
+        [
+          {
+            "node": "Relevance Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini - Relevance": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Relevance Check",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Relevance Check": {
+      "main": [
+        [
+          {
+            "node": "Parse Relevance Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Relevance Result": {
+      "main": [
+        [
+          {
+            "node": "Validation Passed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validation Passed?": {
+      "main": [
+        [
+          {
+            "node": "Update Phase: Finalizing",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Rewrite with Feedback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Sonnet - Rewrite": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Rewrite with Feedback",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rewrite with Feedback": {
+      "main": [
+        [
+          {
+            "node": "Update Draft After Rewrite",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Draft After Rewrite": {
+      "main": [
+        [
+          {
+            "node": "Update Phase: Validation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Phase: Finalizing": {
+      "main": [
+        [
+          {
+            "node": "Final Edit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Opus - Final Edit": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Final Edit",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Final Edit": {
+      "main": [
+        [
+          {
+            "node": "Prepare Final Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "staticData": null,
+  "tags": [
+    {
+      "name": "technical-proposal"
+    }
+  ],
+  "triggerCount": 1
+}
