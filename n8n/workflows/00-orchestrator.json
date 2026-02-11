@@ -73,7 +73,7 @@
       "type": "n8n-nodes-base.code",
       "position": [1560, 300],
       "parameters": {
-        "jsCode": "const items = $input.all();\nconst texts = [];\n\nfor (const item of items) {\n  const text = item.json.text || item.json.data || '';\n  if (text) texts.push(text);\n}\n\nconst fullText = texts.join('\\n\\n--- КРАЙ НА ДОКУМЕНТ ---\\n\\n');\nconst jobId = $('Init Job').first().json.jobId;\nconst contractorInfo = $('Init Job').first().json.contractorInfo;\nconst additionalNotes = $('Init Job').first().json.additionalNotes;\n\nreturn [{\n  json: {\n    fullText,\n    documentCount: items.length,\n    totalCharacters: fullText.length,\n    jobId,\n    contractorInfo,\n    additionalNotes\n  }\n}];"
+        "jsCode": "const items = $input.all();\nconst allTexts = [];\nconst docTexts = [];\nconst specTexts = [];\n\nfor (const item of items) {\n  const text = item.json.text || item.json.data || '';\n  const source = item.json.sourceField || '';\n  if (!text) continue;\n  allTexts.push(text);\n  if (source.toLowerCase().includes('spec')) {\n    specTexts.push(text);\n  } else {\n    docTexts.push(text);\n  }\n}\n\nconst fullText = allTexts.join('\\n\\n--- КРАЙ НА ДОКУМЕНТ ---\\n\\n');\nconst documentationText = docTexts.length > 0 ? docTexts.join('\\n\\n') : fullText;\nconst specificationText = specTexts.length > 0 ? specTexts.join('\\n\\n') : fullText;\n\nconst jobId = $('Init Job').first().json.jobId;\nconst contractorInfo = $('Init Job').first().json.contractorInfo;\nconst additionalNotes = $('Init Job').first().json.additionalNotes;\n\nreturn [{\n  json: {\n    fullText,\n    documentationText,\n    specificationText,\n    documentCount: items.length,\n    totalCharacters: fullText.length,\n    docChars: documentationText.length,\n    specChars: specificationText.length,\n    jobId,\n    contractorInfo,\n    additionalNotes\n  }\n}];"
       },
       "typeVersion": 2
     },
@@ -83,7 +83,7 @@
       "type": "n8n-nodes-base.code",
       "position": [1820, 300],
       "parameters": {
-        "jsCode": "const STATUS_URL = 'https://n8n.simeontsvetanovn8nworkflows.site/webhook/internal/update-status';\nconst jobId = $('Init Job').first().json.jobId;\n\ntry {\n  await fetch(STATUS_URL, {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({\n      jobId,\n      status: 'processing',\n      phase: 'requirement_extraction',\n      progress: 20,\n      message: 'Извличане на изискванията от документацията...'\n    })\n  });\n} catch (e) {}\n\nreturn [{ json: {\n  fullText: $('Extract Text').first().json.fullText\n}}];"
+        "jsCode": "const STATUS_URL = 'https://n8n.simeontsvetanovn8nworkflows.site/webhook/internal/update-status';\nconst jobId = $('Init Job').first().json.jobId;\nconst extractData = $('Extract Text').first().json;\n\ntry {\n  await fetch(STATUS_URL, {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({\n      jobId,\n      status: 'processing',\n      phase: 'requirement_extraction',\n      progress: 20,\n      message: `Извличане на изискванията... (${extractData.documentCount} документа, ${extractData.totalCharacters} символа)`\n    })\n  });\n} catch (e) {}\n\nreturn [{ json: {\n  fullText: extractData.fullText,\n  documentationText: extractData.documentationText\n}}];"
       },
       "typeVersion": 2
     },
@@ -111,7 +111,7 @@
       "type": "n8n-nodes-base.code",
       "position": [2340, 300],
       "parameters": {
-        "jsCode": "const STATUS_URL = 'https://n8n.simeontsvetanovn8nworkflows.site/webhook/internal/update-status';\nconst jobId = $('Init Job').first().json.jobId;\n\ntry {\n  await fetch(STATUS_URL, {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({\n      jobId,\n      status: 'processing',\n      phase: 'spec_analysis',\n      progress: 35,\n      message: 'Анализ на техническата спецификация...'\n    })\n  });\n} catch (e) {}\n\nreturn [{ json: {\n  fullText: $('Extract Text').first().json.fullText\n}}];"
+        "jsCode": "const STATUS_URL = 'https://n8n.simeontsvetanovn8nworkflows.site/webhook/internal/update-status';\nconst jobId = $('Init Job').first().json.jobId;\n\ntry {\n  await fetch(STATUS_URL, {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({\n      jobId,\n      status: 'processing',\n      phase: 'spec_analysis',\n      progress: 35,\n      message: 'Анализ на техническата спецификация...'\n    })\n  });\n} catch (e) {}\n\nreturn [{ json: {\n  fullText: $('Extract Text').first().json.fullText,\n  specificationText: $('Extract Text').first().json.specificationText\n}}];"
       },
       "typeVersion": 2
     },
