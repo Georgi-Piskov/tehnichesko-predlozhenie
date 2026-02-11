@@ -1,0 +1,97 @@
+{
+  "name": "TP - Write Section",
+  "nodes": [
+    {
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "position": [0, 300],
+      "webhookId": "tp-write-section",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "tp-write-section",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "prep",
+      "name": "Prepare Section Prompt",
+      "type": "n8n-nodes-base.code",
+      "position": [260, 300],
+      "parameters": {
+        "jsCode": "var s = $json.section;\nvar reqs = $json.requirements;\nvar spec = $json.specData;\nvar ci = $json.contractorInfo;\nvar prev = $json.previousContext || '';\nvar fb = $json.feedback || '';\nvar pt = $json.procurementType || 'неопределен';\nvar idx = $json.sectionIndex;\nvar total = $json.totalSections;\nvar pages = s.estimated_pages || 5;\n\nvar guide = '';\nif (s.subsections) {\n  for (var sub of s.subsections) {\n    guide += '\\n' + sub.id + '. ' + sub.title + ' (~' + (sub.estimated_pages || 2) + ' стр.)';\n    if (sub.content_guidance) guide += '\\n  Указания: ' + sub.content_guidance.join('; ');\n    if (sub.spec_data_to_use) guide += '\\n  Данни: ' + sub.spec_data_to_use.join('; ');\n    if (sub.tables_needed) {\n      for (var t of sub.tables_needed) {\n        if (t.title) guide += '\\n  Таблица: ' + t.title + (t.columns ? ' (' + t.columns.join(', ') + ')' : '');\n      }\n    }\n  }\n}\n\nvar prompt = 'Напиши САМО секция \"' + s.id + '. ' + s.title + '\" от техническото предложение.\\n';\nprompt += 'Секция ' + (idx + 1) + ' от ' + total + '. Обем: ~' + pages + ' стр. (~' + (pages * 375) + ' думи).\\n\\n';\nprompt += 'ТИП ПОРЪЧКА: ' + pt + '\\n\\n';\nprompt += 'ИЗИСКВАНИЯ ОТ ДОКУМЕНТАЦИЯТА:\\n' + JSON.stringify(reqs, null, 2).substring(0, 12000) + '\\n\\n';\nprompt += 'УКАЗАНИЯ ОТ ПЛАНА:\\n' + (guide || s.title) + '\\n\\n';\nprompt += 'ТЕХНИЧЕСКИ ДАННИ ОТ СПЕЦИФИКАЦИЯТА:\\n' + JSON.stringify(spec, null, 2).substring(0, 12000) + '\\n\\n';\nprompt += 'ИНФОРМАЦИЯ ЗА ИЗПЪЛНИТЕЛЯ:\\n' + JSON.stringify(ci, null, 2) + '\\n\\n';\n\nif (prev) {\n  prompt += 'ПРЕДИШЕН КОНТЕКСТ (НЕ повтаряй, осигури кохерентност):\\n...' + prev.substring(prev.length > 2000 ? prev.length - 2000 : 0) + '\\n\\n';\n}\nif (fb) {\n  prompt += '⚠️ ОБРАТНА ВРЪЗКА ОТ ВАЛИДАЦИЯ — ЗАДЪЛЖИТЕЛНО ПОПРАВИ:\\n' + fb + '\\n\\n';\n}\n\nprompt += 'ПРАВИЛА ЗА ПИСАНЕ:\\n';\nprompt += '1. САМО тази секция — започни с ## ' + s.id + '. ' + s.title + '\\n';\nprompt += '2. За всяка дейност: КАКВО → КАК → С КАКВО → КОЙ → КОНТРОЛ\\n';\nprompt += '3. Markdown таблици за: оборудване, персонал, графици, контролни планове\\n';\nprompt += '4. Графици: представяй като таблици (Дейност | Срок/Месец | Отговорник)\\n';\nprompt += '5. Placeholders [⚠️ ПОПЪЛНЕТЕ: ...] за неизвестна конкретна информация\\n';\nprompt += '6. НЕ измисляй факти, НЕ пиши generic текст приложим за всяка поръчка\\n';\nprompt += '7. Нормативи САМО релевантни за типа поръчка (' + pt + ')\\n';\nprompt += '8. НЕ повтаряй текст от предишните секции\\n';\nprompt += '9. НЕ пиши въведение/заключение на ЦЕЛИЯ документ\\n';\n\nreturn [{ json: { prompt: prompt } }];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "llm",
+      "name": "Write Section",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "position": [520, 300],
+      "parameters": {
+        "text": "={{ $json.prompt }}",
+        "promptType": "define",
+        "messages": {
+          "messageValues": [
+            {
+              "type": "system",
+              "message": "You are an expert writer of technical proposals for Bulgarian public procurement. You write in Bulgarian. You write ONE section at a time with surgical precision. RULES: 1) Write ONLY the requested section, not the whole document. 2) Be SPECIFIC to this procurement — no generic text. 3) Use Markdown tables for equipment, personnel, schedules, quality plans. 4) Schedules should be presented as tables with columns: Activity | Timeline | Responsible. 5) Use ONLY facts from the provided data. If data is missing, use placeholder [⚠️ ПОПЪЛНЕТЕ: ...]. 6) NEVER fabricate names, dates, numbers. 7) Match the procurement type — do NOT write about construction for IT projects or vice versa."
+            }
+          ]
+        }
+      },
+      "typeVersion": 1.4
+    },
+    {
+      "id": "model",
+      "name": "Claude Sonnet",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "position": [440, 520],
+      "parameters": {
+        "model": "anthropic/claude-sonnet-4",
+        "options": {
+          "maxTokens": 16000,
+          "temperature": 0.3
+        }
+      },
+      "credentials": {
+        "openRouterApi": {
+          "id": "UjrrZkDAIpdRXbb8",
+          "name": "GP-Open_Router_Test"
+        }
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "format",
+      "name": "Format Output",
+      "type": "n8n-nodes-base.code",
+      "position": [780, 300],
+      "parameters": {
+        "jsCode": "var raw = ($json.text || $json.response || '').trim();\nvar wordCount = raw.split(/\\s+/).length;\nvar placeholders = (raw.match(/\\[⚠️ ПОПЪЛНЕТЕ:/g) || []).length;\nvar tableCount = (raw.match(/\\|.*\\|/g) || []).length;\n\nreturn [{\n  json: {\n    sectionText: raw,\n    stats: {\n      wordCount: wordCount,\n      estimatedPages: Math.round(wordCount / 375),\n      placeholders: placeholders,\n      tables: Math.floor(tableCount / 3)\n    }\n  }\n}];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "respond",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [1040, 300],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "typeVersion": 1.1
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [[{ "node": "Prepare Section Prompt", "type": "main", "index": 0 }]] },
+    "Prepare Section Prompt": { "main": [[{ "node": "Write Section", "type": "main", "index": 0 }]] },
+    "Claude Sonnet": { "ai_languageModel": [[{ "node": "Write Section", "type": "ai_languageModel", "index": 0 }]] },
+    "Write Section": { "main": [[{ "node": "Format Output", "type": "main", "index": 0 }]] },
+    "Format Output": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

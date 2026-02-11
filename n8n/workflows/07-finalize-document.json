@@ -21,13 +21,13 @@
       "type": "@n8n/n8n-nodes-langchain.chainLlm",
       "position": [300, 300],
       "parameters": {
-        "text": "=Ти си главен редактор на технически предложения за обществени поръчки.\n\nПолучаваш пълния документ. Извърши финална редакция.\n\n## ЗАДАЧИ:\n\n### 1. Кохерентност\n- Провери логиката между секциите\n- Премахни противоречия\n- Осигури еднаква терминология\n- Провери препратките (\"Както е описано в т. 3.2\" → дали т. 3.2 го съдържа)\n\n### 2. Премахване на повторения\n- Остави подробното описание на едно място, на другите — кратка препратка\n- ВНИМАНИЕ: повторения в различен контекст са допустими\n\n### 3. Езикова редакция\n- Правопис и граматика на български\n- Професионален, официален стил\n- Кратки, ясни изречения\n- Единно форматиране на нормативни препратки\n\n### 4. Форматиране\n- Проверка на номерацията\n- Проверка на таблиците\n- Коректен Markdown\n\n### 5. Проверка на placeholders\n- Всички [⚠️ ПОПЪЛНЕТЕ: ...] маркери да са ясни и конкретни\n\n## ПРАВИЛА:\n- НЕ добавяй ново съдържание\n- НЕ премахвай съдържание (само ясни повторения)\n- Запази всички placeholders\n- Запази структурата\n- Бъди консервативен\n\n{{ $json.validationFeedback ? '## ЗАБЕЛЕЖКИ ОТ ВАЛИДАЦИЯ:\\n' + $json.validationFeedback : '' }}\n\n## ДОКУМЕНТ ЗА РЕДАКЦИЯ:\n\n{{ $json.draftText }}",
+        "text": "=Ти си главен редактор на технически предложения за обществени поръчки.\n\nДокументът е НАПИСАН секция по секция от различни агенти. Твоята задача е да го превърнеш в КОХЕРЕНТЕН, професионален документ.\n\n## ЗАДАЧИ (по приоритет):\n\n### 1. КОХЕРЕНТНОСТ МЕЖДУ СЕКЦИИТЕ\n- Секциите са писани отделно — може да има несъответствия\n- Стандартизирай терминологията (еднакви термини навсякъде)\n- Провери препратките между секции (\"както е описано в т. 3.2\")\n- Осигури логическа последователност\n\n### 2. ПРЕМАХВАНЕ НА ПОВТОРЕНИЯ\n- Ако едно и също е описано в 2+ секции → остави подробно на едно място, на другите кратка препратка\n- ВНИМАНИЕ: повторения в различен контекст са допустими\n\n### 3. ТАБЛИЦИ И ФОРМАТИРАНЕ\n- Стандартизирай формата на всички таблици\n- Провери Markdown форматирането\n- Номерацията да е последователна\n- Графиците (ако има) да са консистентни\n\n### 4. ЕЗИКОВА РЕДАКЦИЯ\n- Правопис и граматика на български\n- Професионален, официален стил\n- Кратки, ясни изречения\n- Единно форматиране на нормативни препратки\n\n### 5. PLACEHOLDERS\n- Всички [⚠️ ПОПЪЛНЕТЕ: ...] маркери да са ясни и конкретни\n- Добави placeholders ако откриеш места с измислени данни\n\n## ПРАВИЛА:\n- НЕ добавяй НОВО съдържание\n- НЕ премахвай съдържание (само ясни повторения)\n- Запази всички placeholders\n- Бъди КОНСЕРВАТИВЕН — подобрявай, не преписвай\n\n## ДОКУМЕНТ ЗА РЕДАКЦИЯ:\n\n{{ $json.draftText }}",
         "promptType": "define",
         "messages": {
           "messageValues": [
             {
               "type": "system",
-              "message": "You are a chief editor for Bulgarian public procurement technical proposals. Edit for coherence, remove repetitions, fix grammar, standardize formatting. Do NOT add new content. Do NOT remove content except clear repetitions. Preserve all placeholders. Output the FULL edited Markdown document followed by a JSON stats block."
+              "message": "You are a chief editor for Bulgarian public procurement technical proposals. The document was written section by section by different agents. Your job is to make it COHERENT: standardize terminology, fix cross-references, remove repetitions between sections, standardize table formatting, fix grammar. Do NOT add new content. Do NOT remove content except clear repetitions. Be CONSERVATIVE. Output the FULL edited Markdown document."
             }
           ]
         }
@@ -37,14 +37,19 @@
     {
       "id": "model",
       "name": "Claude Opus",
-      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
       "position": [220, 520],
       "parameters": {
-        "model": "anthropic/claude-opus-4-20250514",
+        "model": "anthropic/claude-opus-4",
         "options": {
-          "baseURL": "https://openrouter.ai/api/v1",
           "maxTokens": 64000,
           "temperature": 0.15
+        }
+      },
+      "credentials": {
+        "openRouterApi": {
+          "id": "UjrrZkDAIpdRXbb8",
+          "name": "GP-Open_Router_Test"
         }
       },
       "typeVersion": 1
@@ -55,7 +60,7 @@
       "type": "n8n-nodes-base.code",
       "position": [600, 300],
       "parameters": {
-        "jsCode": "const raw = ($json.text || $json.response || '').trim();\n\nlet finalText = raw;\nlet stats = {};\n\nconst jsonMatch = raw.match(/```(?:json)?\\s*(\\{[\\s\\S]*?\\})\\s*```\\s*$/);\nif (jsonMatch) {\n  finalText = raw.substring(0, jsonMatch.index).trim();\n  try {\n    stats = JSON.parse(jsonMatch[1]);\n  } catch (e) {}\n}\n\nconst wordCount = finalText.split(/\\s+/).length;\nconst estimatedPages = Math.round(wordCount / 375);\nconst placeholderCount = (finalText.match(/\\[⚠️ ПОПЪЛНЕТЕ:/g) || []).length;\n\nstats = {\n  ...stats,\n  wordCount: stats.word_count || wordCount,\n  estimatedPages: stats.estimated_pages || estimatedPages,\n  placeholderCount: stats.total_placeholders || placeholderCount,\n  charCount: finalText.length\n};\n\nreturn [{\n  json: {\n    finalText,\n    stats\n  }\n}];"
+        "jsCode": "var raw = ($json.text || $json.response || '').trim();\nvar finalText = raw;\n\n// Remove trailing JSON stats block if present\nvar jsonMatch = raw.match(/```(?:json)?\\s*(\\{[\\s\\S]*?\\})\\s*```\\s*$/);\nif (jsonMatch) {\n  finalText = raw.substring(0, jsonMatch.index).trim();\n}\n\nvar wordCount = finalText.split(/\\s+/).length;\nvar estimatedPages = Math.round(wordCount / 375);\nvar placeholderCount = (finalText.match(/\\[⚠️ ПОПЪЛНЕТЕ:/g) || []).length;\nvar tableCount = (finalText.match(/\\|.*\\|/g) || []).length;\n\nreturn [{\n  json: {\n    finalText: finalText,\n    stats: {\n      wordCount: wordCount,\n      estimatedPages: estimatedPages,\n      placeholderCount: placeholderCount,\n      tableRows: tableCount,\n      charCount: finalText.length\n    }\n  }\n}];"
       },
       "typeVersion": 2
     },

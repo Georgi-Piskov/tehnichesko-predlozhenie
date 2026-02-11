@@ -21,13 +21,13 @@
       "type": "@n8n/n8n-nodes-langchain.chainLlm",
       "position": [300, 300],
       "parameters": {
-        "text": "=Ти си експерт по структуриране на технически предложения за обществени поръчки.\n\nПолучаваш:\n\nИЗВЛЕЧЕНИ ИЗИСКВАНИЯ:\n{{ JSON.stringify($json.requirements, null, 2) }}\n\nАНАЛИЗ НА СПЕЦИФИКАЦИЯТА:\n{{ JSON.stringify($json.specData, null, 2) }}\n\nИНФОРМАЦИЯ ЗА ИЗПЪЛНИТЕЛЯ:\n{{ JSON.stringify($json.contractorInfo, null, 2) }}\n\n## ЗАДАЧА\nСъздай детайлен план на техническото предложение.\n\n## КРИТИЧНИ ПРАВИЛА\n- Секции САМО за изисквания, които РЕАЛНО съществуват в подадените данни\n- НЕ добавяй секции, които не са свързани с конкретно изискване\n- Ако requirements е празен масив → създай базова структура според типа на поръчката\n- Ако specData има null полета → не създавай секции за тях\n- Реалистичен обем: 30-100 страници (зависи от сложността)\n- КОНКРЕТНИ указания, не \"опишете подхода\"\n\nВърни САМО валиден JSON:\n{\n  \"document_title\": \"ТЕХНИЧЕСКО ПРЕДЛОЖЕНИЕ за [тема от документацията]\",\n  \"total_estimated_pages\": 75,\n  \"sections\": [\n    {\n      \"id\": \"1\",\n      \"title\": \"Заглавие\",\n      \"requirement_id\": \"1\",\n      \"estimated_pages\": 10,\n      \"subsections\": [\n        {\n          \"id\": \"1.1\",\n          \"title\": \"Подзаглавие\",\n          \"requirement_id\": \"1.1\",\n          \"estimated_pages\": 3,\n          \"content_guidance\": [\"Какво да се напише\"],\n          \"spec_data_to_use\": [\"Кои данни от спецификацията\"],\n          \"tables_needed\": [{\"title\": \"\", \"columns\": []}]\n        }\n      ]\n    }\n  ],\n  \"appendices\": [{\"title\": \"\", \"description\": \"\"}]\n}\n\nСАМО JSON, без друг текст.",
+        "text": "=Ти си експерт по структуриране на технически предложения за обществени поръчки.\n\nПолучаваш:\n\nТИП ПОРЪЧКА: {{ $json.requirements?.procurement_type || 'неопределен' }}\n\nИЗВЛЕЧЕНИ ИЗИСКВАНИЯ:\n{{ JSON.stringify($json.requirements, null, 2).substring(0, 30000) }}\n\nАНАЛИЗ НА СПЕЦИФИКАЦИЯТА:\n{{ JSON.stringify($json.specData, null, 2).substring(0, 30000) }}\n\nИНФОРМАЦИЯ ЗА ИЗПЪЛНИТЕЛЯ:\n{{ JSON.stringify($json.contractorInfo, null, 2) }}\n\n## ЗАДАЧА\nСъздай ДЕТАЙЛЕН план на техническото предложение.\n\nВсяка секция трябва да е ПОДРОБНО разписана защото ДРУГ агент ще пише всяка секция ОТДЕЛНО по твоя план. Той ще вижда САМО плана за своята секция, затова указанията трябва да са максимално конкретни.\n\n## ПРАВИЛА ЗА ПЛАНА\n1. Една секция за ВСЯКО изискване от документацията\n2. Минимум 3-5 подсекции на секция с КОНКРЕТНИ указания\n3. За всяка подсекция: какво точно да се напише, какви данни от спецификацията да се ползват\n4. Планирай таблици: заглавие + колони (оборудване, персонал, графици, качество)\n5. Планирай графици като таблици: Дейност | Месец 1 | Месец 2 | ...\n6. Реалистичен обем: 30-100 стр. в зависимост от сложността\n7. НЕ добавяй секции за несъществуващи изисквания\n8. Ако requirements е празен → създай базова структура (представяне, подход, график, организация)\n9. Ако specData полета са null → не создавай секции за тях\n\n## ФОРМАТ\nВърни САМО валиден JSON (БЕЗ markdown блокове):\n{\n  \"document_title\": \"ТЕХНИЧЕСКО ПРЕДЛОЖЕНИЕ за [точно наименование от документацията]\",\n  \"procurement_type\": \"строителство | услуги | доставки | проектиране\",\n  \"total_estimated_pages\": 60,\n  \"sections\": [\n    {\n      \"id\": \"1\",\n      \"title\": \"Заглавие от изискването\",\n      \"requirement_id\": \"1\",\n      \"estimated_pages\": 8,\n      \"subsections\": [\n        {\n          \"id\": \"1.1\",\n          \"title\": \"Подзаглавие\",\n          \"requirement_id\": \"1.1\",\n          \"estimated_pages\": 2,\n          \"content_guidance\": [\"Напишете конкретно X\", \"Опишете подход за Y\", \"Включете таблица за Z\"],\n          \"spec_data_to_use\": [\"object.name\", \"technical_parameters[0].value\"],\n          \"tables_needed\": [{\"title\": \"Списък оборудване\", \"columns\": [\"Тип\", \"Марка/модел\", \"Брой\", \"Характеристики\"]}]\n        }\n      ]\n    }\n  ],\n  \"appendices\": [{\"title\": \"\", \"description\": \"\"}]\n}\n\nСАМО JSON, без друг текст.",
         "promptType": "define",
         "messages": {
           "messageValues": [
             {
               "type": "system",
-              "message": "You create document plans for Bulgarian public procurement proposals. CRITICAL: Only create sections for requirements that ACTUALLY exist in the provided data. If requirements array is empty, create a minimal base structure. Do NOT invent sections for non-existent requirements. Output ONLY valid JSON. Language: Bulgarian."
+              "message": "You create VERY detailed document plans for Bulgarian procurement proposals. Each section plan must be detailed enough for another AI to write it independently. Include specific content guidance, data references, and table specifications for every subsection. Only create sections for requirements that ACTUALLY exist. Output ONLY valid JSON, no markdown. Language: Bulgarian."
             }
           ]
         }
@@ -37,14 +37,19 @@
     {
       "id": "model",
       "name": "Claude Sonnet",
-      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
       "position": [220, 520],
       "parameters": {
-        "model": "anthropic/claude-sonnet-4-20250514",
+        "model": "anthropic/claude-sonnet-4",
         "options": {
-          "baseURL": "https://openrouter.ai/api/v1",
           "maxTokens": 16000,
           "temperature": 0.2
+        }
+      },
+      "credentials": {
+        "openRouterApi": {
+          "id": "UjrrZkDAIpdRXbb8",
+          "name": "GP-Open_Router_Test"
         }
       },
       "typeVersion": 1
@@ -55,7 +60,7 @@
       "type": "n8n-nodes-base.code",
       "position": [600, 300],
       "parameters": {
-        "jsCode": "const raw = ($json.text || $json.response || '').trim();\nlet result;\n\ntry {\n  result = JSON.parse(raw);\n} catch (e) {\n  const m = raw.match(/```(?:json)?\\s*([\\s\\S]*?)```/);\n  const candidate = m ? m[1].trim() : raw;\n  try {\n    const s = candidate.indexOf('{');\n    const e2 = candidate.lastIndexOf('}');\n    let jsonStr = candidate.substring(s, e2 + 1);\n    jsonStr = jsonStr.replace(/,\\s*([\\]\\}])/g, '$1');\n    result = JSON.parse(jsonStr);\n  } catch (e3) {\n    result = { document_title: 'Parse error', sections: [], _raw: raw.substring(0, 2000) };\n  }\n}\n\nreturn [{ json: { documentPlan: result } }];"
+        "jsCode": "var raw = ($json.text || $json.response || '').trim();\nvar result;\n\ntry {\n  result = JSON.parse(raw);\n} catch (e) {\n  var m = raw.match(/```(?:json)?\\s*([\\s\\S]*?)```/);\n  var candidate = m ? m[1].trim() : raw;\n  try {\n    var s = candidate.indexOf('{');\n    var e2 = candidate.lastIndexOf('}');\n    var jsonStr = candidate.substring(s, e2 + 1);\n    jsonStr = jsonStr.replace(/,\\s*([\\]\\}])/g, '$1');\n    result = JSON.parse(jsonStr);\n  } catch (e3) {\n    result = { document_title: 'Parse error', sections: [], _raw: raw.substring(0, 2000) };\n  }\n}\n\nreturn [{ json: { documentPlan: result } }];"
       },
       "typeVersion": 2
     },

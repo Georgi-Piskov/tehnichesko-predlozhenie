@@ -1,0 +1,86 @@
+{
+  "name": "TP - Validate Section",
+  "nodes": [
+    {
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "position": [0, 300],
+      "webhookId": "tp-validate-section",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "tp-validate-section",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "llm",
+      "name": "Validate Section",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "position": [300, 300],
+      "parameters": {
+        "text": "=Ти си строг одитор на технически предложения за обществени поръчки.\nПроверяваш ЕДНА секция от документа.\n\nТИП ПОРЪЧКА: {{ $json.procurementType || 'неопределен' }}\n\nСЕКЦИЯ ЗА ПРОВЕРКА:\n{{ $json.sectionText.substring(0, 30000) }}\n\nИЗИСКВАНЕ КОЕТО ТРЯБВА ДА ПОКРИЕ:\n{{ JSON.stringify($json.section, null, 2).substring(0, 5000) }}\n\nОРИГИНАЛНИ ИЗИСКВАНИЯ ОТ ДОКУМЕНТАЦИЯТА:\n{{ JSON.stringify($json.requirements, null, 2).substring(0, 15000) }}\n\nПРОВЕРКИ:\n1. ПОКРИТИЕ: Покрива ли ВСИЧКИ подточки на изискването? Пропуснати ли са аспекти?\n2. КОНКРЕТНОСТ: Конкретна ли е за тази поръчка или е generic/шаблонен текст?\n3. ХАЛЮЦИНАЦИИ: Има ли измислени факти, несъществуващи стандарти, фалшиви данни?\n4. РЕЛЕВАНТНОСТ: Съответства ли на типа поръчка? (не строителство за IT и обратно)\n5. ТАБЛИЦИ: Има ли подходящи таблици? Добре форматирани ли са?\n6. ОБЕМ: Адекватен ли е? (не прекалено кратък, не раздут с повторения)\n\nОЦЕНКА:\n- 80+ точки = PASS (секцията е достатъчно добра)\n- Под 80 = FAIL (нужна е корекция)\n- FAIL САМО при: пропуснати изисквания, халюцинации, изцяло generic текст\n- При FAIL: дай КОНКРЕТНИ инструкции какво точно да се поправи\n\nВърни САМО валиден JSON (без markdown блокове):\n{\n  \"passed\": true,\n  \"score\": 85,\n  \"issues\": [\"кратко описание на проблем\"],\n  \"feedback\": \"конкретни инструкции за поправка (само ако passed=false)\"\n}",
+        "promptType": "define",
+        "messages": {
+          "messageValues": [
+            {
+              "type": "system",
+              "message": "You are a strict but fair quality auditor for Bulgarian procurement proposals. You check ONE section at a time. PASS if the section is 80%+ adequate. FAIL only for serious issues: missing requirements, hallucinations, or entirely generic text. When you FAIL, provide SPECIFIC actionable feedback. Output ONLY valid JSON, no markdown blocks. Language: Bulgarian."
+            }
+          ]
+        }
+      },
+      "typeVersion": 1.4
+    },
+    {
+      "id": "model",
+      "name": "Claude Opus",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "position": [220, 520],
+      "parameters": {
+        "model": "anthropic/claude-opus-4",
+        "options": {
+          "maxTokens": 4000,
+          "temperature": 0.1
+        }
+      },
+      "credentials": {
+        "openRouterApi": {
+          "id": "UjrrZkDAIpdRXbb8",
+          "name": "GP-Open_Router_Test"
+        }
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "parse",
+      "name": "Parse Result",
+      "type": "n8n-nodes-base.code",
+      "position": [600, 300],
+      "parameters": {
+        "jsCode": "var raw = ($json.text || $json.response || '').trim();\nvar result;\n\ntry {\n  result = JSON.parse(raw);\n} catch (e) {\n  var m = raw.match(/```(?:json)?\\s*([\\s\\S]*?)```/);\n  var candidate = m ? m[1].trim() : raw;\n  try {\n    var s = candidate.indexOf('{');\n    var e2 = candidate.lastIndexOf('}');\n    var js = candidate.substring(s, e2 + 1).replace(/,\\s*([\\]\\}])/g, '$1');\n    result = JSON.parse(js);\n  } catch (e3) {\n    result = { passed: true, score: 70, issues: ['Parse error — defaulting to PASS'], feedback: '' };\n  }\n}\n\nresult.passed = result.passed !== false && (result.score || 80) >= 80;\n\nreturn [{ json: result }];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "respond",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [900, 300],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "typeVersion": 1.1
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [[{ "node": "Validate Section", "type": "main", "index": 0 }]] },
+    "Claude Opus": { "ai_languageModel": [[{ "node": "Validate Section", "type": "ai_languageModel", "index": 0 }]] },
+    "Validate Section": { "main": [[{ "node": "Parse Result", "type": "main", "index": 0 }]] },
+    "Parse Result": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

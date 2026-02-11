@@ -5,7 +5,7 @@
       "id": "webhook",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
-      "position": [0, 300],
+      "position": [0, 200],
       "webhookId": "tp-generate",
       "parameters": {
         "httpMethod": "POST",
@@ -19,9 +19,9 @@
       "id": "init-job",
       "name": "Init Job",
       "type": "n8n-nodes-base.code",
-      "position": [260, 300],
+      "position": [260, 200],
       "parameters": {
-        "jsCode": "const jobId = 'tp-' + Date.now();\nlet contractor = {};\ntry {\n  contractor = JSON.parse($json.body?.contractor || '{}');\n} catch (e) {\n  contractor = { name: 'Неизвестен' };\n}\n\nconst item = $input.first();\nreturn [{\n  json: {\n    jobId,\n    contractorInfo: contractor,\n    additionalNotes: $json.body?.additionalNotes || ''\n  },\n  binary: item.binary\n}];"
+        "jsCode": "var jobId = 'tp_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);\nvar ci = {\n  name: $json.contractorName || '',\n  eik: $json.contractorEIK || '',\n  experience: $json.contractorExperience || '',\n  certifications: $json.contractorCertifications || '',\n  address: $json.contractorAddress || ''\n};\nreturn [{\n  json: { jobId: jobId, contractorInfo: ci, timestamp: new Date().toISOString() },\n  binary: $binary\n}];"
       },
       "typeVersion": 2
     },
@@ -29,10 +29,10 @@
       "id": "send-response",
       "name": "Send Response",
       "type": "n8n-nodes-base.respondToWebhook",
-      "position": [520, 300],
+      "position": [520, 200],
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ ({success: true, jobId: $json.jobId}) }}"
+        "responseBody": "={{ JSON.stringify({ jobId: $json.jobId, status: 'accepted', message: 'Pipeline started' }) }}"
       },
       "typeVersion": 1.1
     },
@@ -40,9 +40,9 @@
       "id": "start-pipeline",
       "name": "Start Pipeline",
       "type": "n8n-nodes-base.code",
-      "position": [780, 300],
+      "position": [780, 200],
       "parameters": {
-        "jsCode": "const STATUS_URL = 'https://n8n.simeontsvetanovn8nworkflows.site/webhook/internal/update-status';\nconst { jobId } = $json;\n\ntry {\n  await fetch(STATUS_URL, {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({\n      jobId,\n      status: 'processing',\n      phase: 'text_extraction',\n      progress: 5,\n      message: 'Извличане на текст от документите...'\n    })\n  });\n} catch (e) {}\n\nconst item = $input.first();\nreturn [{ json: item.json, binary: item.binary }];"
+        "jsCode": "try {\n  await fetch('https://n8n.simeontsvetanovn8nworkflows.site/webhook/internal/update-status', {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({ jobId: $json.jobId, status: 'processing', phase: 'extracting', progress: 5, message: 'Извличане на текст от документите...' })\n  });\n} catch (e) {}\nreturn [{ json: $json, binary: $binary }];"
       },
       "typeVersion": 2
     },
@@ -50,9 +50,9 @@
       "id": "split-files",
       "name": "Split Binary Files",
       "type": "n8n-nodes-base.code",
-      "position": [1040, 300],
+      "position": [1040, 200],
       "parameters": {
-        "jsCode": "const inputItem = $input.first();\nconst binaryData = inputItem.binary || {};\nconst meta = inputItem.json;\nconst results = [];\n\nfor (const [fieldName, fileData] of Object.entries(binaryData)) {\n  results.push({\n    json: { sourceField: fieldName, fileName: fileData.fileName, jobId: meta.jobId, contractorInfo: meta.contractorInfo, additionalNotes: meta.additionalNotes },\n    binary: { data: fileData }\n  });\n}\n\nif (results.length === 0) {\n  throw new Error('Не са намерени файлове за обработка');\n}\nreturn results;"
+        "jsCode": "var b = $binary || {};\nvar items = [];\nfor (var k of Object.keys(b)) {\n  items.push({ json: { sourceField: k, fileName: b[k].fileName || k }, binary: { data: b[k] } });\n}\nif (items.length === 0) throw new Error('No files uploaded');\nreturn items;"
       },
       "typeVersion": 2
     },
@@ -60,7 +60,7 @@
       "id": "extract-pdf",
       "name": "Extract from PDF",
       "type": "n8n-nodes-base.extractFromFile",
-      "position": [1300, 300],
+      "position": [1300, 200],
       "parameters": {
         "operation": "pdf",
         "options": {}
@@ -68,12 +68,12 @@
       "typeVersion": 1
     },
     {
-      "id": "extract-text",
-      "name": "Extract Text",
+      "id": "merge-texts",
+      "name": "Merge Texts",
       "type": "n8n-nodes-base.code",
-      "position": [1560, 300],
+      "position": [0, 450],
       "parameters": {
-        "jsCode": "const items = $input.all();\nconst allTexts = [];\nconst docTexts = [];\nconst specTexts = [];\n\nfor (const item of items) {\n  const text = item.json.text || item.json.data || '';\n  const source = item.json.sourceField || '';\n  if (!text) continue;\n  allTexts.push(text);\n  if (source.toLowerCase().includes('spec')) {\n    specTexts.push(text);\n  } else {\n    docTexts.push(text);\n  }\n}\n\nconst fullText = allTexts.join('\\n\\n--- КРАЙ НА ДОКУМЕНТ ---\\n\\n');\nconst documentationText = docTexts.length > 0 ? docTexts.join('\\n\\n') : fullText;\nconst specificationText = specTexts.length > 0 ? specTexts.join('\\n\\n') : fullText;\n\nconst jobId = $('Init Job').first().json.jobId;\nconst contractorInfo = $('Init Job').first().json.contractorInfo;\nconst additionalNotes = $('Init Job').first().json.additionalNotes;\n\nreturn [{\n  json: {\n    fullText,\n    documentationText,\n    specificationText,\n    documentCount: items.length,\n    totalCharacters: fullText.length,\n    docChars: documentationText.length,\n    specChars: specificationText.length,\n    jobId,\n    contractorInfo,\n    additionalNotes\n  }\n}];"
+        "jsCode": "var items = $input.all();\nvar docText = '', specText = '';\nfor (var item of items) {\n  var text = item.json.text || item.json.data || '';\n  var sf = item.json.sourceField || '';\n  if (sf === 'documentation' || sf.toLowerCase().indexOf('doc') >= 0) docText += text;\n  else specText += text;\n}\nvar fullText = (docText + '\\n\\n---\\n\\n' + specText).trim();\nreturn [{ json: { documentationText: docText, specificationText: specText, fullText: fullText, totalCharacters: fullText.length, documentCount: items.length } }];"
       },
       "typeVersion": 2
     },
@@ -81,27 +81,24 @@
       "id": "after-extract",
       "name": "After Extract",
       "type": "n8n-nodes-base.code",
-      "position": [1820, 300],
+      "position": [260, 450],
       "parameters": {
-        "jsCode": "const STATUS_URL = 'https://n8n.simeontsvetanovn8nworkflows.site/webhook/internal/update-status';\nconst jobId = $('Init Job').first().json.jobId;\nconst extractData = $('Extract Text').first().json;\n\ntry {\n  await fetch(STATUS_URL, {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({\n      jobId,\n      status: 'processing',\n      phase: 'requirement_extraction',\n      progress: 20,\n      message: `Извличане на изискванията... (${extractData.documentCount} документа, ${extractData.totalCharacters} символа)`\n    })\n  });\n} catch (e) {}\n\nreturn [{ json: {\n  fullText: extractData.fullText,\n  documentationText: extractData.documentationText\n}}];"
+        "jsCode": "try {\n  await fetch('https://n8n.simeontsvetanovn8nworkflows.site/webhook/internal/update-status', {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({ jobId: $('Init Job').first().json.jobId, status: 'processing', phase: 'requirements', progress: 15, message: 'Извличане на изисквания...' })\n  });\n} catch (e) {}\nreturn [{ json: $json }];"
       },
       "typeVersion": 2
     },
     {
-      "id": "http-requirements",
+      "id": "extract-requirements",
       "name": "Extract Requirements",
       "type": "n8n-nodes-base.httpRequest",
-      "position": [2080, 300],
+      "position": [520, 450],
       "parameters": {
         "method": "POST",
         "url": "https://n8n.simeontsvetanovn8nworkflows.site/webhook/tp-step-02-requirements",
         "sendBody": true,
-        "contentType": "json",
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify($json) }}",
-        "options": {
-          "timeout": 300000
-        }
+        "options": { "timeout": 180000 }
       },
       "typeVersion": 4.2
     },
@@ -109,139 +106,84 @@
       "id": "after-requirements",
       "name": "After Requirements",
       "type": "n8n-nodes-base.code",
-      "position": [2340, 300],
+      "position": [780, 450],
       "parameters": {
-        "jsCode": "const STATUS_URL = 'https://n8n.simeontsvetanovn8nworkflows.site/webhook/internal/update-status';\nconst jobId = $('Init Job').first().json.jobId;\n\ntry {\n  await fetch(STATUS_URL, {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({\n      jobId,\n      status: 'processing',\n      phase: 'spec_analysis',\n      progress: 35,\n      message: 'Анализ на техническата спецификация...'\n    })\n  });\n} catch (e) {}\n\nreturn [{ json: {\n  fullText: $('Extract Text').first().json.fullText,\n  specificationText: $('Extract Text').first().json.specificationText\n}}];"
+        "jsCode": "try {\n  await fetch('https://n8n.simeontsvetanovn8nworkflows.site/webhook/internal/update-status', {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({ jobId: $('Init Job').first().json.jobId, status: 'processing', phase: 'analysis', progress: 30, message: 'Анализ на спецификация...' })\n  });\n} catch (e) {}\nvar mt = $('Merge Texts').first().json;\nreturn [{ json: { documentationText: mt.documentationText || '', specificationText: mt.specificationText || '', fullText: mt.fullText || '' } }];"
       },
       "typeVersion": 2
     },
     {
-      "id": "http-analyze",
+      "id": "analyze-spec",
       "name": "Analyze Spec",
       "type": "n8n-nodes-base.httpRequest",
-      "position": [2600, 300],
+      "position": [1040, 450],
       "parameters": {
         "method": "POST",
         "url": "https://n8n.simeontsvetanovn8nworkflows.site/webhook/tp-step-03-analyze",
         "sendBody": true,
-        "contentType": "json",
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify($json) }}",
-        "options": {
-          "timeout": 300000
-        }
+        "options": { "timeout": 180000 }
       },
       "typeVersion": 4.2
     },
     {
-      "id": "after-analysis",
+      "id": "after-spec",
       "name": "After Spec Analysis",
       "type": "n8n-nodes-base.code",
-      "position": [2860, 300],
+      "position": [1300, 450],
       "parameters": {
-        "jsCode": "const STATUS_URL = 'https://n8n.simeontsvetanovn8nworkflows.site/webhook/internal/update-status';\nconst jobId = $('Init Job').first().json.jobId;\n\ntry {\n  await fetch(STATUS_URL, {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({\n      jobId,\n      status: 'processing',\n      phase: 'document_planning',\n      progress: 50,\n      message: 'Планиране структурата на документа...'\n    })\n  });\n} catch (e) {}\n\nreturn [{ json: {\n  requirements: $('Extract Requirements').first().json.requirements,\n  specData: $('Analyze Spec').first().json.specData,\n  contractorInfo: $('Init Job').first().json.contractorInfo\n}}];"
+        "jsCode": "try {\n  await fetch('https://n8n.simeontsvetanovn8nworkflows.site/webhook/internal/update-status', {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({ jobId: $('Init Job').first().json.jobId, status: 'processing', phase: 'planning', progress: 45, message: 'Планиране на документа...' })\n  });\n} catch (e) {}\nreturn [{ json: {\n  requirements: $('Extract Requirements').first().json.requirements || $('Extract Requirements').first().json,\n  specData: $json.specData || $json,\n  contractorInfo: $('Init Job').first().json.contractorInfo\n} }];"
       },
       "typeVersion": 2
     },
     {
-      "id": "http-plan",
+      "id": "plan-document",
       "name": "Plan Document",
       "type": "n8n-nodes-base.httpRequest",
-      "position": [3120, 300],
+      "position": [0, 700],
       "parameters": {
         "method": "POST",
         "url": "https://n8n.simeontsvetanovn8nworkflows.site/webhook/tp-step-04-plan",
         "sendBody": true,
-        "contentType": "json",
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify($json) }}",
-        "options": {
-          "timeout": 300000
-        }
+        "options": { "timeout": 180000 }
       },
       "typeVersion": 4.2
     },
     {
-      "id": "after-plan",
-      "name": "After Plan",
+      "id": "section-loop",
+      "name": "Section Loop",
       "type": "n8n-nodes-base.code",
-      "position": [3380, 300],
+      "position": [260, 700],
       "parameters": {
-        "jsCode": "const STATUS_URL = 'https://n8n.simeontsvetanovn8nworkflows.site/webhook/internal/update-status';\nconst jobId = $('Init Job').first().json.jobId;\n\ntry {\n  await fetch(STATUS_URL, {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({\n      jobId,\n      status: 'processing',\n      phase: 'document_writing',\n      progress: 60,\n      message: 'Писане на техническото предложение...'\n    })\n  });\n} catch (e) {}\n\nreturn [{ json: {\n  requirements: $('Extract Requirements').first().json.requirements,\n  specData: $('Analyze Spec').first().json.specData,\n  contractorInfo: $('Init Job').first().json.contractorInfo,\n  documentPlan: $('Plan Document').first().json.documentPlan\n}}];"
+        "jsCode": "var BASE = 'https://n8n.simeontsvetanovn8nworkflows.site/webhook';\nvar STATUS_URL = BASE + '/internal/update-status';\nvar jobId = $('Init Job').first().json.jobId;\nvar plan = $json.documentPlan;\nvar reqs = $('Extract Requirements').first().json.requirements || $('Extract Requirements').first().json;\nvar spec = $('Analyze Spec').first().json.specData || $('Analyze Spec').first().json;\nvar ci = $('Init Job').first().json.contractorInfo || {};\nvar pt = (reqs && reqs.procurement_type) || 'unknown';\n\nvar sections = (plan && plan.sections) || [];\nif (sections.length === 0) throw new Error('Plan has no sections');\n\nvar fullDoc = '# ' + (plan.document_title || 'ТЕХНИЧЕСКО ПРЕДЛОЖЕНИЕ') + '\\n\\n';\nvar results = [];\n\nfor (var i = 0; i < sections.length; i++) {\n  var sec = sections[i];\n  var prog = 55 + Math.round((i / sections.length) * 30);\n  try {\n    await fetch(STATUS_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jobId: jobId, status: 'processing', phase: 'writing', progress: prog, message: 'Секция ' + (i+1) + '/' + sections.length + ': ' + sec.title }) });\n  } catch(e) {}\n\n  var prevCtx = fullDoc.length > 2000 ? fullDoc.substring(fullDoc.length - 2000) : fullDoc;\n  var secText = '';\n  var attempts = 0;\n  var feedback = '';\n\n  while (attempts < 2) {\n    try {\n      var wr = await fetch(BASE + '/tp-write-section', {\n        method: 'POST',\n        headers: { 'Content-Type': 'application/json' },\n        body: JSON.stringify({ section: sec, requirements: reqs, specData: spec, contractorInfo: ci, previousContext: prevCtx, feedback: feedback, procurementType: pt, sectionIndex: i, totalSections: sections.length })\n      });\n      if (!wr.ok) throw new Error('Write HTTP ' + wr.status);\n      var wRes = await wr.json();\n      secText = wRes.sectionText || wRes.text || '';\n\n      var vr = await fetch(BASE + '/tp-validate-section', {\n        method: 'POST',\n        headers: { 'Content-Type': 'application/json' },\n        body: JSON.stringify({ sectionText: secText, section: sec, requirements: reqs, procurementType: pt })\n      });\n      if (!vr.ok) break;\n      var vRes = await vr.json();\n      if (vRes.passed) break;\n      feedback = vRes.feedback || 'Improve section.';\n      attempts++;\n    } catch (err) {\n      secText = '## ' + sec.id + '. ' + sec.title + '\\n\\n[ERROR: ' + err.message + ']\\n';\n      break;\n    }\n  }\n\n  fullDoc += secText + '\\n\\n';\n  results.push({ id: sec.id, title: sec.title, wordCount: secText.trim().split(/\\s+/).length, attempts: attempts + 1 });\n}\n\nvar totalWC = fullDoc.trim().split(/\\s+/).length;\ntry {\n  await fetch(STATUS_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jobId: jobId, status: 'processing', phase: 'finalizing', progress: 88, message: 'Финализиране...' }) });\n} catch(e) {}\n\nreturn [{ json: { fullDocument: fullDoc, sectionResults: results, totalWordCount: totalWC, estimatedPages: Math.round(totalWC / 375) } }];"
       },
       "typeVersion": 2
     },
     {
-      "id": "http-write",
-      "name": "Write Document",
-      "type": "n8n-nodes-base.httpRequest",
-      "position": [3640, 300],
-      "parameters": {
-        "method": "POST",
-        "url": "https://n8n.simeontsvetanovn8nworkflows.site/webhook/tp-step-05-write",
-        "sendBody": true,
-        "contentType": "json",
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($json) }}",
-        "options": {
-          "timeout": 900000
-        }
-      },
-      "typeVersion": 4.2
-    },
-    {
-      "id": "after-write",
-      "name": "After Write",
+      "id": "prep-finalize",
+      "name": "Prep Finalize",
       "type": "n8n-nodes-base.code",
-      "position": [3900, 300],
+      "position": [520, 700],
       "parameters": {
-        "jsCode": "const STATUS_URL = 'https://n8n.simeontsvetanovn8nworkflows.site/webhook/internal/update-status';\nconst jobId = $('Init Job').first().json.jobId;\n\ntry {\n  await fetch(STATUS_URL, {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({\n      jobId,\n      status: 'processing',\n      phase: 'validation',\n      progress: 80,\n      message: 'Валидация на документа...'\n    })\n  });\n} catch (e) {}\n\nreturn [{ json: {\n  requirements: $('Extract Requirements').first().json.requirements,\n  specData: $('Analyze Spec').first().json.specData,\n  draftText: $('Write Document').first().json.draftText\n}}];"
+        "jsCode": "return [{ json: { draftText: $json.fullDocument || '' } }];"
       },
       "typeVersion": 2
     },
     {
-      "id": "http-validate",
-      "name": "Validate Document",
-      "type": "n8n-nodes-base.httpRequest",
-      "position": [4160, 300],
-      "parameters": {
-        "method": "POST",
-        "url": "https://n8n.simeontsvetanovn8nworkflows.site/webhook/tp-step-06-validate",
-        "sendBody": true,
-        "contentType": "json",
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($json) }}",
-        "options": {
-          "timeout": 600000
-        }
-      },
-      "typeVersion": 4.2
-    },
-    {
-      "id": "after-validate",
-      "name": "After Validate",
-      "type": "n8n-nodes-base.code",
-      "position": [4420, 300],
-      "parameters": {
-        "jsCode": "const STATUS_URL = 'https://n8n.simeontsvetanovn8nworkflows.site/webhook/internal/update-status';\nconst jobId = $('Init Job').first().json.jobId;\nconst validation = $('Validate Document').first().json;\n\ntry {\n  await fetch(STATUS_URL, {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({\n      jobId,\n      status: 'processing',\n      phase: 'finalization',\n      progress: 90,\n      message: validation.validationPassed\n        ? 'Документът премина валидацията. Финална редакция...'\n        : 'Финална редакция с корекции от валидацията...'\n    })\n  });\n} catch (e) {}\n\nreturn [{ json: {\n  draftText: $('Write Document').first().json.draftText,\n  validationFeedback: validation.rewriteInstructions || ''\n}}];"
-      },
-      "typeVersion": 2
-    },
-    {
-      "id": "http-finalize",
+      "id": "finalize-document",
       "name": "Finalize Document",
       "type": "n8n-nodes-base.httpRequest",
-      "position": [4680, 300],
+      "position": [780, 700],
       "parameters": {
         "method": "POST",
         "url": "https://n8n.simeontsvetanovn8nworkflows.site/webhook/tp-step-07-finalize",
         "sendBody": true,
-        "contentType": "json",
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify($json) }}",
-        "options": {
-          "timeout": 900000
-        }
+        "options": { "timeout": 600000 }
       },
       "typeVersion": 4.2
     },
@@ -249,9 +191,9 @@
       "id": "pipeline-complete",
       "name": "Pipeline Complete",
       "type": "n8n-nodes-base.code",
-      "position": [4940, 300],
+      "position": [1040, 700],
       "parameters": {
-        "jsCode": "const STATUS_URL = 'https://n8n.simeontsvetanovn8nworkflows.site/webhook/internal/update-status';\nconst jobId = $('Init Job').first().json.jobId;\nconst result = $('Finalize Document').first().json;\n\ntry {\n  await fetch(STATUS_URL, {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({\n      jobId,\n      status: 'completed',\n      phase: 'done',\n      progress: 100,\n      message: 'Техническото предложение е готово!',\n      result: {\n        finalText: result.finalText,\n        stats: result.stats\n      }\n    })\n  });\n} catch (e) {}\n\nreturn [{ json: { done: true, jobId } }];"
+        "jsCode": "var jobId = $('Init Job').first().json.jobId;\nvar finalText = $json.finalText || $json.draftText || '';\nvar stats = $json.stats || {};\ntry {\n  await fetch('https://n8n.simeontsvetanovn8nworkflows.site/webhook/internal/update-status', {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({ jobId: jobId, status: 'completed', phase: 'done', progress: 100, message: 'Готово!', result: { text: finalText, stats: stats } })\n  });\n} catch (e) {}\nreturn [{ json: { success: true, jobId: jobId } }];"
       },
       "typeVersion": 2
     }
@@ -262,19 +204,16 @@
     "Send Response": { "main": [[{ "node": "Start Pipeline", "type": "main", "index": 0 }]] },
     "Start Pipeline": { "main": [[{ "node": "Split Binary Files", "type": "main", "index": 0 }]] },
     "Split Binary Files": { "main": [[{ "node": "Extract from PDF", "type": "main", "index": 0 }]] },
-    "Extract from PDF": { "main": [[{ "node": "Extract Text", "type": "main", "index": 0 }]] },
-    "Extract Text": { "main": [[{ "node": "After Extract", "type": "main", "index": 0 }]] },
+    "Extract from PDF": { "main": [[{ "node": "Merge Texts", "type": "main", "index": 0 }]] },
+    "Merge Texts": { "main": [[{ "node": "After Extract", "type": "main", "index": 0 }]] },
     "After Extract": { "main": [[{ "node": "Extract Requirements", "type": "main", "index": 0 }]] },
     "Extract Requirements": { "main": [[{ "node": "After Requirements", "type": "main", "index": 0 }]] },
     "After Requirements": { "main": [[{ "node": "Analyze Spec", "type": "main", "index": 0 }]] },
     "Analyze Spec": { "main": [[{ "node": "After Spec Analysis", "type": "main", "index": 0 }]] },
     "After Spec Analysis": { "main": [[{ "node": "Plan Document", "type": "main", "index": 0 }]] },
-    "Plan Document": { "main": [[{ "node": "After Plan", "type": "main", "index": 0 }]] },
-    "After Plan": { "main": [[{ "node": "Write Document", "type": "main", "index": 0 }]] },
-    "Write Document": { "main": [[{ "node": "After Write", "type": "main", "index": 0 }]] },
-    "After Write": { "main": [[{ "node": "Validate Document", "type": "main", "index": 0 }]] },
-    "Validate Document": { "main": [[{ "node": "After Validate", "type": "main", "index": 0 }]] },
-    "After Validate": { "main": [[{ "node": "Finalize Document", "type": "main", "index": 0 }]] },
+    "Plan Document": { "main": [[{ "node": "Section Loop", "type": "main", "index": 0 }]] },
+    "Section Loop": { "main": [[{ "node": "Prep Finalize", "type": "main", "index": 0 }]] },
+    "Prep Finalize": { "main": [[{ "node": "Finalize Document", "type": "main", "index": 0 }]] },
     "Finalize Document": { "main": [[{ "node": "Pipeline Complete", "type": "main", "index": 0 }]] }
   },
   "settings": { "executionOrder": "v1" }
