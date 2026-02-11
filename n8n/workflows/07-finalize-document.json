@@ -16,12 +16,22 @@
       "typeVersion": 2
     },
     {
+      "id": "prep",
+      "name": "Prepare Data",
+      "type": "n8n-nodes-base.code",
+      "position": [260, 300],
+      "parameters": {
+        "jsCode": "var body = $json.body || $json;\nvar draft = body.draftText || '';\nreturn [{ json: { draftText: draft } }];"
+      },
+      "typeVersion": 2
+    },
+    {
       "id": "llm",
       "name": "Final Edit",
       "type": "@n8n/n8n-nodes-langchain.chainLlm",
-      "position": [300, 300],
+      "position": [520, 300],
       "parameters": {
-        "text": "=Ти си главен редактор на технически предложения за обществени поръчки.\n\nДокументът е НАПИСАН секция по секция от различни агенти. Твоята задача е да го превърнеш в КОХЕРЕНТЕН, професионален документ.\n\n## ЗАДАЧИ (по приоритет):\n\n### 1. КОХЕРЕНТНОСТ МЕЖДУ СЕКЦИИТЕ\n- Секциите са писани отделно — може да има несъответствия\n- Стандартизирай терминологията (еднакви термини навсякъде)\n- Провери препратките между секции (\"както е описано в т. 3.2\")\n- Осигури логическа последователност\n\n### 2. ПРЕМАХВАНЕ НА ПОВТОРЕНИЯ\n- Ако едно и също е описано в 2+ секции → остави подробно на едно място, на другите кратка препратка\n- ВНИМАНИЕ: повторения в различен контекст са допустими\n\n### 3. ТАБЛИЦИ И ФОРМАТИРАНЕ\n- Стандартизирай формата на всички таблици\n- Провери Markdown форматирането\n- Номерацията да е последователна\n- Графиците (ако има) да са консистентни\n\n### 4. ЕЗИКОВА РЕДАКЦИЯ\n- Правопис и граматика на български\n- Професионален, официален стил\n- Кратки, ясни изречения\n- Единно форматиране на нормативни препратки\n\n### 5. PLACEHOLDERS\n- Всички [⚠️ ПОПЪЛНЕТЕ: ...] маркери да са ясни и конкретни\n- Добави placeholders ако откриеш места с измислени данни\n\n## ПРАВИЛА:\n- НЕ добавяй НОВО съдържание\n- НЕ премахвай съдържание (само ясни повторения)\n- Запази всички placeholders\n- Бъди КОНСЕРВАТИВЕН — подобрявай, не преписвай\n\n## ДОКУМЕНТ ЗА РЕДАКЦИЯ:\n\n{{ $json.body.draftText || '' }}",
+        "text": "=Ти си главен редактор на технически предложения за обществени поръчки.\n\nДокументът е НАПИСАН секция по секция от различни агенти. Твоята задача е да го превърнеш в КОХЕРЕНТЕН, професионален документ.\n\n## ЗАДАЧИ (по приоритет):\n\n### 1. КОХЕРЕНТНОСТ МЕЖДУ СЕКЦИИТЕ\n- Секциите са писани отделно — може да има несъответствия\n- Стандартизирай терминологията (еднакви термини навсякъде)\n- Провери препратките между секции (\"както е описано в т. 3.2\")\n- Осигури логическа последователност\n\n### 2. ПРЕМАХВАНЕ НА ПОВТОРЕНИЯ\n- Ако едно и също е описано в 2+ секции → остави подробно на едно място, на другите кратка препратка\n- ВНИМАНИЕ: повторения в различен контекст са допустими\n\n### 3. ТАБЛИЦИ И ФОРМАТИРАНЕ\n- Стандартизирай формата на всички таблици\n- Провери Markdown форматирането\n- Номерацията да е последователна\n- Графиците (ако има) да са консистентни\n\n### 4. ЕЗИКОВА РЕДАКЦИЯ\n- Правопис и граматика на български\n- Професионален, официален стил\n- Кратки, ясни изречения\n- Единно форматиране на нормативни препратки\n\n### 5. PLACEHOLDERS\n- Всички [⚠️ ПОПЪЛНЕТЕ: ...] маркери да са ясни и конкретни\n- Добави placeholders ако откриеш места с измислени данни\n\n## ПРАВИЛА:\n- НЕ добавяй НОВО съдържание\n- НЕ премахвай съдържание (само ясни повторения)\n- Запази всички placeholders\n- Бъди КОНСЕРВАТИВЕН — подобрявай, не преписвай\n\n## ДОКУМЕНТ ЗА РЕДАКЦИЯ:\n\n{{ $json.draftText }}",
         "promptType": "define",
         "messages": {
           "messageValues": [
@@ -38,7 +48,7 @@
       "id": "model",
       "name": "Claude Opus",
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
-      "position": [220, 520],
+      "position": [440, 520],
       "parameters": {
         "model": "anthropic/claude-opus-4",
         "options": {
@@ -58,9 +68,9 @@
       "id": "process",
       "name": "Process Result",
       "type": "n8n-nodes-base.code",
-      "position": [600, 300],
+      "position": [780, 300],
       "parameters": {
-        "jsCode": "var raw = ($json.text || $json.response || '').trim();\nvar finalText = raw;\n\n// Remove trailing JSON stats block if present\nvar jsonMatch = raw.match(/```(?:json)?\\s*(\\{[\\s\\S]*?\\})\\s*```\\s*$/);\nif (jsonMatch) {\n  finalText = raw.substring(0, jsonMatch.index).trim();\n}\n\nvar wordCount = finalText.split(/\\s+/).length;\nvar estimatedPages = Math.round(wordCount / 375);\nvar placeholderCount = (finalText.match(/\\[⚠️ ПОПЪЛНЕТЕ:/g) || []).length;\nvar tableCount = (finalText.match(/\\|.*\\|/g) || []).length;\n\nreturn [{\n  json: {\n    finalText: finalText,\n    stats: {\n      wordCount: wordCount,\n      estimatedPages: estimatedPages,\n      placeholderCount: placeholderCount,\n      tableRows: tableCount,\n      charCount: finalText.length\n    }\n  }\n}];"
+        "jsCode": "var raw = ($json.text || $json.response || '').trim();\nvar finalText = raw;\n\nvar jsonMatch = raw.match(/```(?:json)?\\s*(\\{[\\s\\S]*?\\})\\s*```\\s*$/);\nif (jsonMatch) {\n  finalText = raw.substring(0, jsonMatch.index).trim();\n}\n\nvar wordCount = finalText.split(/\\s+/).length;\nvar estimatedPages = Math.round(wordCount / 375);\nvar placeholderCount = (finalText.match(/\\[⚠️ ПОПЪЛНЕТЕ:/g) || []).length;\nvar tableCount = (finalText.match(/\\|.*\\|/g) || []).length;\n\nreturn [{\n  json: {\n    finalText: finalText,\n    stats: {\n      wordCount: wordCount,\n      estimatedPages: estimatedPages,\n      placeholderCount: placeholderCount,\n      tableRows: tableCount,\n      charCount: finalText.length\n    }\n  }\n}];"
       },
       "typeVersion": 2
     },
@@ -68,7 +78,7 @@
       "id": "respond",
       "name": "Respond",
       "type": "n8n-nodes-base.respondToWebhook",
-      "position": [900, 300],
+      "position": [1040, 300],
       "parameters": {
         "respondWith": "json",
         "responseBody": "={{ $json }}"
@@ -77,7 +87,8 @@
     }
   ],
   "connections": {
-    "Webhook": { "main": [[{ "node": "Final Edit", "type": "main", "index": 0 }]] },
+    "Webhook": { "main": [[{ "node": "Prepare Data", "type": "main", "index": 0 }]] },
+    "Prepare Data": { "main": [[{ "node": "Final Edit", "type": "main", "index": 0 }]] },
     "Claude Opus": { "ai_languageModel": [[{ "node": "Final Edit", "type": "ai_languageModel", "index": 0 }]] },
     "Final Edit": { "main": [[{ "node": "Process Result", "type": "main", "index": 0 }]] },
     "Process Result": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] }

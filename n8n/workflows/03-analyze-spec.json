@@ -16,12 +16,22 @@
       "typeVersion": 2
     },
     {
+      "id": "prep",
+      "name": "Prepare Data",
+      "type": "n8n-nodes-base.code",
+      "position": [260, 300],
+      "parameters": {
+        "jsCode": "var body = $json.body || $json;\nvar specText = body.specificationText || body.fullText || '';\nif (specText.length > 80000) specText = specText.substring(0, 80000);\nreturn [{ json: { specText: specText } }];"
+      },
+      "typeVersion": 2
+    },
+    {
       "id": "llm",
       "name": "Analyze Spec",
       "type": "@n8n/n8n-nodes-langchain.chainLlm",
-      "position": [300, 300],
+      "position": [520, 300],
       "parameters": {
-        "text": "=Ти си експерт-технически анализатор за обществени поръчки в България.\n\n## ЗАДАЧА\nИзвлечи ВСИЧКИ конкретни технически данни от документацията/спецификацията.\n\n## КЪДЕ ДА ТЪРСИШ\n- Техническа спецификация / Задание\n- Количествена сметка\n- Технически изисквания към изпълнението\n- Описание на обекта/предмета\n- Изисквания за персонал и оборудване\n- Нормативни изисквания\n\n## КАКВО ДА ИЗВЛЕЧЕШ\n1. Описание на обекта — какво е предметът (НЕ предполагай — прочети от текста)\n2. Обхват на работите/дейностите — конкретни дейности, фази, резултати\n3. Технически параметри — САМО споменатите в текста (материали, стандарти, размери)\n4. Персонал — САМО ако е описан в документа\n5. Оборудване — САМО ако е описано в документа\n6. Нормативна рамка — САМО цитираните закони/наредби/стандарти\n7. Срокове, гаранции, ЗБУТ, екология — САМО ако са описани\n\n## КРИТИЧНИ ПРАВИЛА ПРОТИВ ХАЛЮЦИНАЦИИ\n- САМО факти от ТОЗИ документ — НИЩО измислено\n- Ако поле ЛИПСВА в документа → стойност null или празен масив []\n- НЕ добавяй технически параметри, които не са написани в текста\n- НЕ предполагай тип обект — прочети го от документа\n- Ако документът е за услуги → НЕ добавяй строителни материали\n- Ако документът е за IT → НЕ добавяй бетон, арматура, изолация\n- Конкретност: цитирай точните стойности от текста\n- Ако нещо е неясно → запиши го точно както е, не интерпретирай\n\n## ФОРМАТ\nВърни САМО валиден JSON (без markdown блокове):\n{\n  \"object\": {\n    \"type\": \"строителство | проектиране | доставка | услуга | смесена | null\",\n    \"name\": \"Наименование от документа или null\",\n    \"description\": \"Описание от документа или null\",\n    \"location\": \"Местоположение от документа или null\"\n  },\n  \"scope_of_work\": [{\"phase\": \"\", \"activities\": [], \"deliverables\": []}],\n  \"technical_parameters\": [{\"category\": \"\", \"parameter\": \"\", \"value\": \"\", \"standard\": \"\"}],\n  \"personnel_requirements\": [{\"role\": \"\", \"qualifications\": \"\"}],\n  \"equipment_requirements\": [{\"type\": \"\", \"specs\": \"\"}],\n  \"regulatory_framework\": [],\n  \"timeline\": {\"total_duration\": null, \"phases\": []},\n  \"warranty_periods\": [{\"type\": \"\", \"period\": \"\"}],\n  \"safety_requirements\": [],\n  \"environmental_requirements\": [],\n  \"key_quantities\": [{\"item\": \"\", \"quantity\": \"\", \"unit\": \"\"}],\n  \"extraction_confidence\": \"HIGH | MEDIUM | LOW\",\n  \"notes\": \"Бележки — какво липсва, какво е неясно\"\n}\n\nВАЖНО: Празните масиви [] и null стойности са ПРАВИЛНИЯТ отговор когато данните ЛИПСВАТ. НЕ ги попълвай с измислени стойности!\n\nДОКУМЕНТАЦИЯ/СПЕЦИФИКАЦИЯ:\n{{ ($json.body.specificationText || $json.body.fullText || '').substring(0, 80000) }}",
+        "text": "=Ти си експерт-технически анализатор за обществени поръчки в България.\n\n## ЗАДАЧА\nИзвлечи ВСИЧКИ конкретни технически данни от документацията/спецификацията.\n\n## КЪДЕ ДА ТЪРСИШ\n- Техническа спецификация / Задание\n- Количествена сметка\n- Технически изисквания към изпълнението\n- Описание на обекта/предмета\n- Изисквания за персонал и оборудване\n- Нормативни изисквания\n\n## КАКВО ДА ИЗВЛЕЧЕШ\n1. Описание на обекта — какво е предметът (НЕ предполагай — прочети от текста)\n2. Обхват на работите/дейностите — конкретни дейности, фази, резултати\n3. Технически параметри — САМО споменатите в текста (материали, стандарти, размери)\n4. Персонал — САМО ако е описан в документа\n5. Оборудване — САМО ако е описано в документа\n6. Нормативна рамка — САМО цитираните закони/наредби/стандарти\n7. Срокове, гаранции, ЗБУТ, екология — САМО ако са описани\n\n## КРИТИЧНИ ПРАВИЛА ПРОТИВ ХАЛЮЦИНАЦИИ\n- САМО факти от ТОЗИ документ — НИЩО измислено\n- Ако поле ЛИПСВА в документа → стойност null или празен масив []\n- НЕ добавяй технически параметри, които не са написани в текста\n- НЕ предполагай тип обект — прочети го от документа\n- Ако документът е за услуги → НЕ добавяй строителни материали\n- Ако документът е за IT → НЕ добавяй бетон, арматура, изолация\n- Конкретност: цитирай точните стойности от текста\n- Ако нещо е неясно → запиши го точно както е, не интерпретирай\n\n## ФОРМАТ\nВърни САМО валиден JSON (без markdown блокове):\n{\n  \"object\": {\n    \"type\": \"строителство | проектиране | доставка | услуга | смесена | null\",\n    \"name\": \"Наименование от документа или null\",\n    \"description\": \"Описание от документа или null\",\n    \"location\": \"Местоположение от документа или null\"\n  },\n  \"scope_of_work\": [{\"phase\": \"\", \"activities\": [], \"deliverables\": []}],\n  \"technical_parameters\": [{\"category\": \"\", \"parameter\": \"\", \"value\": \"\", \"standard\": \"\"}],\n  \"personnel_requirements\": [{\"role\": \"\", \"qualifications\": \"\"}],\n  \"equipment_requirements\": [{\"type\": \"\", \"specs\": \"\"}],\n  \"regulatory_framework\": [],\n  \"timeline\": {\"total_duration\": null, \"phases\": []},\n  \"warranty_periods\": [{\"type\": \"\", \"period\": \"\"}],\n  \"safety_requirements\": [],\n  \"environmental_requirements\": [],\n  \"key_quantities\": [{\"item\": \"\", \"quantity\": \"\", \"unit\": \"\"}],\n  \"extraction_confidence\": \"HIGH | MEDIUM | LOW\",\n  \"notes\": \"Бележки — какво липсва, какво е неясно\"\n}\n\nВАЖНО: Празните масиви [] и null стойности са ПРАВИЛНИЯТ отговор когато данните ЛИПСВАТ. НЕ ги попълвай с измислени стойности!\n\nДОКУМЕНТАЦИЯ/СПЕЦИФИКАЦИЯ:\n{{ $json.specText }}",
         "promptType": "define",
         "messages": {
           "messageValues": [
@@ -38,7 +48,7 @@
       "id": "model",
       "name": "Claude Sonnet",
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
-      "position": [220, 520],
+      "position": [440, 520],
       "parameters": {
         "model": "anthropic/claude-sonnet-4",
         "options": {
@@ -58,7 +68,7 @@
       "id": "parse",
       "name": "Parse Spec Data",
       "type": "n8n-nodes-base.code",
-      "position": [600, 300],
+      "position": [780, 300],
       "parameters": {
         "jsCode": "const raw = ($json.text || $json.response || '').trim();\nlet result;\n\ntry {\n  result = JSON.parse(raw);\n} catch (e) {\n  const m = raw.match(/```(?:json)?\\s*([\\s\\S]*?)```/);\n  const candidate = m ? m[1].trim() : raw;\n  try {\n    const s = candidate.indexOf('{');\n    const e2 = candidate.lastIndexOf('}');\n    let jsonStr = candidate.substring(s, e2 + 1);\n    jsonStr = jsonStr.replace(/,\\s*([\\]\\}])/g, '$1');\n    result = JSON.parse(jsonStr);\n  } catch (e3) {\n    result = { object: { name: 'Parse error' }, _raw: raw.substring(0, 2000) };\n  }\n}\n\nreturn [{ json: { specData: result } }];"
       },
@@ -68,7 +78,7 @@
       "id": "respond",
       "name": "Respond",
       "type": "n8n-nodes-base.respondToWebhook",
-      "position": [900, 300],
+      "position": [1040, 300],
       "parameters": {
         "respondWith": "json",
         "responseBody": "={{ $json }}"
@@ -77,7 +87,8 @@
     }
   ],
   "connections": {
-    "Webhook": { "main": [[{ "node": "Analyze Spec", "type": "main", "index": 0 }]] },
+    "Webhook": { "main": [[{ "node": "Prepare Data", "type": "main", "index": 0 }]] },
+    "Prepare Data": { "main": [[{ "node": "Analyze Spec", "type": "main", "index": 0 }]] },
     "Claude Sonnet": { "ai_languageModel": [[{ "node": "Analyze Spec", "type": "ai_languageModel", "index": 0 }]] },
     "Analyze Spec": { "main": [[{ "node": "Parse Spec Data", "type": "main", "index": 0 }]] },
     "Parse Spec Data": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] }

@@ -16,12 +16,22 @@
       "typeVersion": 2
     },
     {
+      "id": "prep",
+      "name": "Prepare Data",
+      "type": "n8n-nodes-base.code",
+      "position": [260, 300],
+      "parameters": {
+        "jsCode": "var body = $json.body || $json;\nvar docText = body.documentationText || body.fullText || '';\nif (docText.length > 80000) docText = docText.substring(0, 80000);\nreturn [{ json: { documentText: docText } }];"
+      },
+      "typeVersion": 2
+    },
+    {
       "id": "llm",
       "name": "Extract Requirements",
       "type": "@n8n/n8n-nodes-langchain.chainLlm",
-      "position": [300, 300],
+      "position": [520, 300],
       "parameters": {
-        "text": "=Ти си експерт по българско законодателство за обществени поръчки (ЗОП, ППЗОП).\n\n## ЗАДАЧА\nИзвлечи АБСОЛЮТНО ВСИЧКИ изисквания за техническото предложение от документацията.\n\n## КЪДЕ ДА ТЪРСИШ\n- Раздел \"Показатели за оценка на техническите предложения\"\n- Раздел \"Методика за оценка\" / \"Критерии за възлагане\"\n- Раздел \"Изисквания към техническото предложение\"\n- Раздел \"Указания за подготовка на офертата\"\n- Приложения/Образци свързани с техническото предложение\n\n## КАКВО ДА ИЗВЛЕЧЕШ\n1. Основни критерии за оценка — номерираните изисквания/показатели\n2. Подточки — ако изискването казва \"опишете X, включително а), б), в)\" — всяка подточка ОТДЕЛНО\n3. Методика на оценяване — как се оценява, какво дава максимум точки, какво води до 0 точки\n4. Формат и ограничения — лимит на страници, задължителни приложения\n5. Кръстосани препратки — \"виж Техническата спецификация за X\"\n\n## КРИТИЧНИ ПРАВИЛА ПРОТИВ ХАЛЮЦИНАЦИИ\n- Извличай САМО текст, който РЕАЛНО присъства в документа\n- ДОСЛОВНО копиране — не перифразирай, не интерпретирай\n- Ако нещо НЕ е споменато в документа → НЕ го добавяй, постави null\n- НЕ измисляй точки, критерии или подточки, които ги няма\n- Ако не можеш да намериш методика за оценка → scoring: null\n- Ако документът е за услуги → НЕ добавяй строителни изисквания\n- Ако документът е за доставки → НЕ добавяй проектантски изисквания\n- Пропускането на подточка = ДИСКВАЛИФИКАЦИЯ\n- Добавянето на несъществуващо изискване = СЪЩО ДИСКВАЛИФИКАЦИЯ\n\n## ФОРМАТ НА ОТГОВОР\nВърни САМО валиден JSON (без markdown блокове, без обяснения):\n{\n  \"proposal_type\": \"Техническо предложение | Работна програма | Концепция\",\n  \"procurement_subject\": \"Пълно наименование от документа или null\",\n  \"contracting_authority\": \"Възложител от документа или null\",\n  \"procurement_type\": \"строителство | услуги | доставки | проектиране | смесена\",\n  \"requirements\": [\n    {\n      \"id\": \"оригинален номер от документа\",\n      \"title\": \"Дословен текст на заглавието\",\n      \"full_text\": \"Дословен текст — копиран точно от документа\",\n      \"sub_requirements\": [{\"id\": \"1.1\", \"text\": \"Дословен текст\"}],\n      \"scoring\": {\"max_points\": null, \"criteria\": \"Дословен текст от методиката или null\"}\n    }\n  ],\n  \"format_requirements\": {\"page_limit\": null, \"attachments\": [], \"instructions\": []},\n  \"references_to_spec\": [],\n  \"extraction_confidence\": \"HIGH | MEDIUM | LOW\",\n  \"notes\": \"Бележки за неясноти или проблеми при извличането\"\n}\n\nДОКУМЕНТАЦИЯ:\n{{ ($json.body.documentationText || $json.body.fullText || '').substring(0, 80000) }}",
+        "text": "=Ти си експерт по българско законодателство за обществени поръчки (ЗОП, ППЗОП).\n\n## ЗАДАЧА\nИзвлечи АБСОЛЮТНО ВСИЧКИ изисквания за техническото предложение от документацията.\n\n## КЪДЕ ДА ТЪРСИШ\n- Раздел \"Показатели за оценка на техническите предложения\"\n- Раздел \"Методика за оценка\" / \"Критерии за възлагане\"\n- Раздел \"Изисквания към техническото предложение\"\n- Раздел \"Указания за подготовка на офертата\"\n- Приложения/Образци свързани с техническото предложение\n\n## КАКВО ДА ИЗВЛЕЧЕШ\n1. Основни критерии за оценка — номерираните изисквания/показатели\n2. Подточки — ако изискването казва \"опишете X, включително а), б), в)\" — всяка подточка ОТДЕЛНО\n3. Методика на оценяване — как се оценява, какво дава максимум точки, какво води до 0 точки\n4. Формат и ограничения — лимит на страници, задължителни приложения\n5. Кръстосани препратки — \"виж Техническата спецификация за X\"\n\n## КРИТИЧНИ ПРАВИЛА ПРОТИВ ХАЛЮЦИНАЦИИ\n- Извличай САМО текст, който РЕАЛНО присъства в документа\n- ДОСЛОВНО копиране — не перифразирай, не интерпретирай\n- Ако нещо НЕ е споменато в документа → НЕ го добавяй, постави null\n- НЕ измисляй точки, критерии или подточки, които ги няма\n- Ако не можеш да намериш методика за оценка → scoring: null\n- Ако документът е за услуги → НЕ добавяй строителни изисквания\n- Ако документът е за доставки → НЕ добавяй проектантски изисквания\n- Пропускането на подточка = ДИСКВАЛИФИКАЦИЯ\n- Добавянето на несъществуващо изискване = СЪЩО ДИСКВАЛИФИКАЦИЯ\n\n## ФОРМАТ НА ОТГОВОР\nВърни САМО валиден JSON (без markdown блокове, без обяснения):\n{\n  \"proposal_type\": \"Техническо предложение | Работна програма | Концепция\",\n  \"procurement_subject\": \"Пълно наименование от документа или null\",\n  \"contracting_authority\": \"Възложител от документа или null\",\n  \"procurement_type\": \"строителство | услуги | доставки | проектиране | смесена\",\n  \"requirements\": [\n    {\n      \"id\": \"оригинален номер от документа\",\n      \"title\": \"Дословен текст на заглавието\",\n      \"full_text\": \"Дословен текст — копиран точно от документа\",\n      \"sub_requirements\": [{\"id\": \"1.1\", \"text\": \"Дословен текст\"}],\n      \"scoring\": {\"max_points\": null, \"criteria\": \"Дословен текст от методиката или null\"}\n    }\n  ],\n  \"format_requirements\": {\"page_limit\": null, \"attachments\": [], \"instructions\": []},\n  \"references_to_spec\": [],\n  \"extraction_confidence\": \"HIGH | MEDIUM | LOW\",\n  \"notes\": \"Бележки за неясноти или проблеми при извличането\"\n}\n\nДОКУМЕНТАЦИЯ:\n{{ $json.documentText }}",
         "promptType": "define",
         "messages": {
           "messageValues": [
@@ -38,7 +48,7 @@
       "id": "model",
       "name": "Claude Sonnet",
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
-      "position": [220, 520],
+      "position": [440, 520],
       "parameters": {
         "model": "anthropic/claude-sonnet-4",
         "options": {
@@ -58,7 +68,7 @@
       "id": "parse",
       "name": "Parse Requirements",
       "type": "n8n-nodes-base.code",
-      "position": [600, 300],
+      "position": [780, 300],
       "parameters": {
         "jsCode": "const raw = ($json.text || $json.response || '').trim();\nlet result;\n\ntry {\n  result = JSON.parse(raw);\n} catch (e) {\n  const m = raw.match(/```(?:json)?\\s*([\\s\\S]*?)```/);\n  const candidate = m ? m[1].trim() : raw;\n  try {\n    const s = candidate.indexOf('{');\n    const e2 = candidate.lastIndexOf('}');\n    let jsonStr = candidate.substring(s, e2 + 1);\n    jsonStr = jsonStr.replace(/,\\s*([\\]\\}])/g, '$1');\n    result = JSON.parse(jsonStr);\n  } catch (e3) {\n    const subj = raw.match(/procurement_subject[\":\\s]+[\"']([^\"']+)/);\n    result = {\n      proposal_type: 'Техническо предложение',\n      procurement_subject: subj ? subj[1] : 'Не е разпознато',\n      requirements: [],\n      _parse_error: 'JSON parse failed, raw response stored',\n      _raw: raw.substring(0, 2000)\n    };\n  }\n}\n\nreturn [{ json: { requirements: result } }];"
       },
@@ -68,7 +78,7 @@
       "id": "respond",
       "name": "Respond",
       "type": "n8n-nodes-base.respondToWebhook",
-      "position": [900, 300],
+      "position": [1040, 300],
       "parameters": {
         "respondWith": "json",
         "responseBody": "={{ $json }}"
@@ -77,7 +87,8 @@
     }
   ],
   "connections": {
-    "Webhook": { "main": [[{ "node": "Extract Requirements", "type": "main", "index": 0 }]] },
+    "Webhook": { "main": [[{ "node": "Prepare Data", "type": "main", "index": 0 }]] },
+    "Prepare Data": { "main": [[{ "node": "Extract Requirements", "type": "main", "index": 0 }]] },
     "Claude Sonnet": { "ai_languageModel": [[{ "node": "Extract Requirements", "type": "ai_languageModel", "index": 0 }]] },
     "Extract Requirements": { "main": [[{ "node": "Parse Requirements", "type": "main", "index": 0 }]] },
     "Parse Requirements": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] }

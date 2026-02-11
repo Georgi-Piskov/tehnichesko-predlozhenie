@@ -16,12 +16,22 @@
       "typeVersion": 2
     },
     {
+      "id": "prep",
+      "name": "Prepare Plan Prompt",
+      "type": "n8n-nodes-base.code",
+      "position": [260, 300],
+      "parameters": {
+        "jsCode": "var body = $json.body || $json;\nvar reqs = body.requirements || {};\nvar reqType = reqs.procurement_type || 'неопределен';\nvar reqStr = JSON.stringify(reqs, null, 2);\nif (reqStr.length > 30000) reqStr = reqStr.substring(0, 30000);\nvar specStr = JSON.stringify(body.specData || {}, null, 2);\nif (specStr.length > 30000) specStr = specStr.substring(0, 30000);\nvar ciStr = JSON.stringify(body.contractorInfo || {}, null, 2);\n\nvar p = 'Ти си експерт по структуриране на технически предложения за обществени поръчки.\\n\\nПолучаваш:\\n\\n';\np += 'ТИП ПОРЪЧКА: ' + reqType + '\\n\\n';\np += 'ИЗВЛЕЧЕНИ ИЗИСКВАНИЯ:\\n' + reqStr + '\\n\\n';\np += 'АНАЛИЗ НА СПЕЦИФИКАЦИЯТА:\\n' + specStr + '\\n\\n';\np += 'ИНФОРМАЦИЯ ЗА ИЗПЪЛНИТЕЛЯ:\\n' + ciStr + '\\n\\n';\np += '## ЗАДАЧА\\nСъздай ДЕТАЙЛЕН план на техническото предложение.\\n\\n';\np += 'Всяка секция трябва да е ПОДРОБНО разписана защото ДРУГ агент ще пише всяка секция ОТДЕЛНО по твоя план. ';\np += 'Той ще вижда САМО плана за своята секция, затова указанията трябва да са максимално конкретни.\\n\\n';\np += '## ПРАВИЛА ЗА ПЛАНА\\n';\np += '1. Една секция за ВСЯКО изискване от документацията\\n';\np += '2. Минимум 3-5 подсекции на секция с КОНКРЕТНИ указания\\n';\np += '3. За всяка подсекция: какво точно да се напише, какви данни от спецификацията да се ползват\\n';\np += '4. Планирай таблици: заглавие + колони (оборудване, персонал, графици, качество)\\n';\np += '5. Планирай графици като таблици: Дейност | Месец 1 | Месец 2 | ...\\n';\np += '6. Реалистичен обем: 30-100 стр. в зависимост от сложността\\n';\np += '7. НЕ добавяй секции за несъществуващи изисквания\\n';\np += '8. Ако requirements е празен → създай базова структура (представяне, подход, график, организация)\\n';\np += '9. Ако specData полета са null → не создавай секции за тях\\n\\n';\np += '## ФОРМАТ\\nВърни САМО валиден JSON (БЕЗ markdown блокове):\\n';\np += '{\\n  \"document_title\": \"ТЕХНИЧЕСКО ПРЕДЛОЖЕНИЕ за [точно наименование от документацията]\",\\n';\np += '  \"procurement_type\": \"строителство | услуги | доставки | проектиране\",\\n';\np += '  \"total_estimated_pages\": 60,\\n';\np += '  \"sections\": [\\n    {\\n';\np += '      \"id\": \"1\",\\n      \"title\": \"Заглавие от изискването\",\\n';\np += '      \"requirement_id\": \"1\",\\n      \"estimated_pages\": 8,\\n';\np += '      \"subsections\": [\\n        {\\n';\np += '          \"id\": \"1.1\",\\n          \"title\": \"Подзаглавие\",\\n';\np += '          \"requirement_id\": \"1.1\",\\n          \"estimated_pages\": 2,\\n';\np += '          \"content_guidance\": [\"Напишете конкретно X\", \"Опишете подход за Y\", \"Включете таблица за Z\"],\\n';\np += '          \"spec_data_to_use\": [\"object.name\", \"technical_parameters[0].value\"],\\n';\np += '          \"tables_needed\": [{\"title\": \"Списък оборудване\", \"columns\": [\"Тип\", \"Марка/модел\", \"Брой\", \"Характеристики\"]}]\\n';\np += '        }\\n      ]\\n    }\\n  ],\\n';\np += '  \"appendices\": [{\"title\": \"\", \"description\": \"\"}]\\n}\\n\\n';\np += 'САМО JSON, без друг текст.';\n\nreturn [{ json: { prompt: p } }];"
+      },
+      "typeVersion": 2
+    },
+    {
       "id": "llm",
       "name": "Plan Document",
       "type": "@n8n/n8n-nodes-langchain.chainLlm",
-      "position": [300, 300],
+      "position": [520, 300],
       "parameters": {
-        "text": "=Ти си експерт по структуриране на технически предложения за обществени поръчки.\n\nПолучаваш:\n\nТИП ПОРЪЧКА: {{ ($json.body.requirements || {}).procurement_type || 'неопределен' }}\n\nИЗВЛЕЧЕНИ ИЗИСКВАНИЯ:\n{{ JSON.stringify($json.body.requirements || {}, null, 2).substring(0, 30000) }}\n\nАНАЛИЗ НА СПЕЦИФИКАЦИЯТА:\n{{ JSON.stringify($json.body.specData || {}, null, 2).substring(0, 30000) }}\n\nИНФОРМАЦИЯ ЗА ИЗПЪЛНИТЕЛЯ:\n{{ JSON.stringify($json.body.contractorInfo || {}, null, 2) }}\n\n## ЗАДАЧА\nСъздай ДЕТАЙЛЕН план на техническото предложение.\n\nВсяка секция трябва да е ПОДРОБНО разписана защото ДРУГ агент ще пише всяка секция ОТДЕЛНО по твоя план. Той ще вижда САМО плана за своята секция, затова указанията трябва да са максимално конкретни.\n\n## ПРАВИЛА ЗА ПЛАНА\n1. Една секция за ВСЯКО изискване от документацията\n2. Минимум 3-5 подсекции на секция с КОНКРЕТНИ указания\n3. За всяка подсекция: какво точно да се напише, какви данни от спецификацията да се ползват\n4. Планирай таблици: заглавие + колони (оборудване, персонал, графици, качество)\n5. Планирай графици като таблици: Дейност | Месец 1 | Месец 2 | ...\n6. Реалистичен обем: 30-100 стр. в зависимост от сложността\n7. НЕ добавяй секции за несъществуващи изисквания\n8. Ако requirements е празен → създай базова структура (представяне, подход, график, организация)\n9. Ако specData полета са null → не создавай секции за тях\n\n## ФОРМАТ\nВърни САМО валиден JSON (БЕЗ markdown блокове):\n{\n  \"document_title\": \"ТЕХНИЧЕСКО ПРЕДЛОЖЕНИЕ за [точно наименование от документацията]\",\n  \"procurement_type\": \"строителство | услуги | доставки | проектиране\",\n  \"total_estimated_pages\": 60,\n  \"sections\": [\n    {\n      \"id\": \"1\",\n      \"title\": \"Заглавие от изискването\",\n      \"requirement_id\": \"1\",\n      \"estimated_pages\": 8,\n      \"subsections\": [\n        {\n          \"id\": \"1.1\",\n          \"title\": \"Подзаглавие\",\n          \"requirement_id\": \"1.1\",\n          \"estimated_pages\": 2,\n          \"content_guidance\": [\"Напишете конкретно X\", \"Опишете подход за Y\", \"Включете таблица за Z\"],\n          \"spec_data_to_use\": [\"object.name\", \"technical_parameters[0].value\"],\n          \"tables_needed\": [{\"title\": \"Списък оборудване\", \"columns\": [\"Тип\", \"Марка/модел\", \"Брой\", \"Характеристики\"]}]\n        }\n      ]\n    }\n  ],\n  \"appendices\": [{\"title\": \"\", \"description\": \"\"}]\n}\n\nСАМО JSON, без друг текст.",
+        "text": "={{ $json.prompt }}",
         "promptType": "define",
         "messages": {
           "messageValues": [
@@ -38,7 +48,7 @@
       "id": "model",
       "name": "Claude Sonnet",
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
-      "position": [220, 520],
+      "position": [440, 520],
       "parameters": {
         "model": "anthropic/claude-sonnet-4",
         "options": {
@@ -58,7 +68,7 @@
       "id": "parse",
       "name": "Parse Plan",
       "type": "n8n-nodes-base.code",
-      "position": [600, 300],
+      "position": [780, 300],
       "parameters": {
         "jsCode": "var raw = ($json.text || $json.response || '').trim();\nvar result;\n\ntry {\n  result = JSON.parse(raw);\n} catch (e) {\n  var m = raw.match(/```(?:json)?\\s*([\\s\\S]*?)```/);\n  var candidate = m ? m[1].trim() : raw;\n  try {\n    var s = candidate.indexOf('{');\n    var e2 = candidate.lastIndexOf('}');\n    var jsonStr = candidate.substring(s, e2 + 1);\n    jsonStr = jsonStr.replace(/,\\s*([\\]\\}])/g, '$1');\n    result = JSON.parse(jsonStr);\n  } catch (e3) {\n    result = { document_title: 'Parse error', sections: [], _raw: raw.substring(0, 2000) };\n  }\n}\n\nreturn [{ json: { documentPlan: result } }];"
       },
@@ -68,7 +78,7 @@
       "id": "respond",
       "name": "Respond",
       "type": "n8n-nodes-base.respondToWebhook",
-      "position": [900, 300],
+      "position": [1040, 300],
       "parameters": {
         "respondWith": "json",
         "responseBody": "={{ $json }}"
@@ -77,7 +87,8 @@
     }
   ],
   "connections": {
-    "Webhook": { "main": [[{ "node": "Plan Document", "type": "main", "index": 0 }]] },
+    "Webhook": { "main": [[{ "node": "Prepare Plan Prompt", "type": "main", "index": 0 }]] },
+    "Prepare Plan Prompt": { "main": [[{ "node": "Plan Document", "type": "main", "index": 0 }]] },
     "Claude Sonnet": { "ai_languageModel": [[{ "node": "Plan Document", "type": "ai_languageModel", "index": 0 }]] },
     "Plan Document": { "main": [[{ "node": "Parse Plan", "type": "main", "index": 0 }]] },
     "Parse Plan": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] }
