@@ -2,14 +2,18 @@
   "name": "TP - Step 1: Extract Text",
   "nodes": [
     {
-      "id": "trigger",
-      "name": "Start",
-      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
       "position": [0, 300],
+      "webhookId": "tp-step-01-extract",
       "parameters": {
-        "inputSource": "passthrough"
+        "httpMethod": "POST",
+        "path": "tp-step-01-extract",
+        "responseMode": "responseNode",
+        "options": {}
       },
-      "typeVersion": 1.1
+      "typeVersion": 2
     },
     {
       "id": "split-files",
@@ -41,12 +45,24 @@
         "jsCode": "const items = $input.all();\nconst texts = [];\n\nfor (const item of items) {\n  const text = item.json.text || item.json.data || '';\n  if (text) texts.push(text);\n}\n\nconst fullText = texts.join('\\n\\n--- КРАЙ НА ДОКУМЕНТ ---\\n\\n');\n\nreturn [{\n  json: {\n    fullText: fullText,\n    documentCount: items.length,\n    totalCharacters: fullText.length\n  }\n}];"
       },
       "typeVersion": 2
+    },
+    {
+      "id": "respond",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [1040, 300],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "typeVersion": 1.1
     }
   ],
   "connections": {
-    "Start": { "main": [[{ "node": "Split Binary Files", "type": "main", "index": 0 }]] },
+    "Webhook": { "main": [[{ "node": "Split Binary Files", "type": "main", "index": 0 }]] },
     "Split Binary Files": { "main": [[{ "node": "Extract from PDF", "type": "main", "index": 0 }]] },
-    "Extract from PDF": { "main": [[{ "node": "Merge Texts", "type": "main", "index": 0 }]] }
+    "Extract from PDF": { "main": [[{ "node": "Merge Texts", "type": "main", "index": 0 }]] },
+    "Merge Texts": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] }
   },
   "settings": { "executionOrder": "v1" }
 }

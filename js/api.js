@@ -18,7 +18,7 @@ const API = {
      * @returns {Promise<{jobId: string}>}
      */
     async submitJob(formData) {
-        const response = await fetch(`${this.BASE_URL}/webhook/generate-proposal`, {
+        const response = await fetch(`${this.BASE_URL}/webhook/tp-generate`, {
             method: 'POST',
             body: formData
         });

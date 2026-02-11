@@ -2,14 +2,18 @@
   "name": "TP - Step 3: Analyze Specification",
   "nodes": [
     {
-      "id": "trigger",
-      "name": "Start",
-      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
       "position": [0, 300],
+      "webhookId": "tp-step-03-analyze",
       "parameters": {
-        "inputSource": "passthrough"
+        "httpMethod": "POST",
+        "path": "tp-step-03-analyze",
+        "responseMode": "responseNode",
+        "options": {}
       },
-      "typeVersion": 1.1
+      "typeVersion": 2
     },
     {
       "id": "llm",
@@ -54,12 +58,24 @@
         "jsCode": "const raw = ($json.text || $json.response || '').trim();\nlet result;\n\ntry {\n  result = JSON.parse(raw);\n} catch (e) {\n  const m = raw.match(/```(?:json)?\\s*([\\s\\S]*?)```/);\n  const candidate = m ? m[1].trim() : raw;\n  try {\n    const s = candidate.indexOf('{');\n    const e2 = candidate.lastIndexOf('}');\n    let jsonStr = candidate.substring(s, e2 + 1);\n    jsonStr = jsonStr.replace(/,\\s*([\\]\\}])/g, '$1');\n    result = JSON.parse(jsonStr);\n  } catch (e3) {\n    result = { object: { name: 'Parse error' }, _raw: raw.substring(0, 2000) };\n  }\n}\n\nreturn [{ json: { specData: result } }];"
       },
       "typeVersion": 2
+    },
+    {
+      "id": "respond",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [900, 300],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "typeVersion": 1.1
     }
   ],
   "connections": {
-    "Start": { "main": [[{ "node": "Analyze Spec", "type": "main", "index": 0 }]] },
+    "Webhook": { "main": [[{ "node": "Analyze Spec", "type": "main", "index": 0 }]] },
     "Claude Sonnet": { "ai_languageModel": [[{ "node": "Analyze Spec", "type": "ai_languageModel", "index": 0 }]] },
-    "Analyze Spec": { "main": [[{ "node": "Parse Spec Data", "type": "main", "index": 0 }]] }
+    "Analyze Spec": { "main": [[{ "node": "Parse Spec Data", "type": "main", "index": 0 }]] },
+    "Parse Spec Data": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] }
   },
   "settings": { "executionOrder": "v1" }
 }

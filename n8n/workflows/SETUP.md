@@ -2,39 +2,42 @@
 
 ## 📋 Общ преглед
 
-Системата за генериране на технически предложения се състои от **9 отделни n8n workflow-а**, свързани чрез **Execute Sub-workflow** Pattern. Всеки workflow изпълнява една конкретна операция, което позволява:
+Системата за генериране на технически предложения се състои от **9 отделни n8n workflow-а**, свързани чрез **Webhook + HTTP Request** Pattern. Всеки под-workflow е самостоятелен webhook endpoint. Оркестраторът вика всеки от тях последователно чрез HTTP Request POST:
 - Лесно дебъгване — виждате точно къде се получава грешка
-- Независимо тестване — всеки workflow може да се тества отделно
+- Независимо тестване — всеки workflow може да се тества отделно чрез POST към неговия webhook
 - По-малко timeout-и — всяка операция е по-кратка
 - Лесно мащабиране — промяна на един workflow не засяга останалите
+- Без остарели executeWorkflowTrigger nodes — всичко е Webhook + Respond to Webhook
 
 ## 🏗️ Архитектура
 
 ```
 Frontend (GitHub Pages)
     │
-    ├── POST /webhook/generate-proposal ──→ 00 Orchestrator
-    │     ←── { jobId }                        │
-    │                                          ├── Execute Sub-WF → 01 Extract Text
-    │                                          ├── Execute Sub-WF → 02 Extract Requirements
-    │                                          ├── Execute Sub-WF → 03 Analyze Spec
-    │                                          ├── Execute Sub-WF → 04 Plan Document
-    │                                          ├── Execute Sub-WF → 05 Write Document
-    │                                          ├── Execute Sub-WF → 06 Validate Document
-    │                                          └── Execute Sub-WF → 07 Finalize Document
+    ├── POST /webhook/tp-generate ──→ 00 Orchestrator
+    │     ←── { jobId }                   │
+    │                                     ├── (inline) Split PDF → Extract Text
+    │                                     ├── HTTP POST /webhook/tp-step-02-requirements → 02
+    │                                     ├── HTTP POST /webhook/tp-step-03-analyze → 03
+    │                                     ├── HTTP POST /webhook/tp-step-04-plan → 04
+    │                                     ├── HTTP POST /webhook/tp-step-05-write → 05
+    │                                     ├── HTTP POST /webhook/tp-step-06-validate → 06
+    │                                     └── HTTP POST /webhook/tp-step-07-finalize → 07
     │
-    │   (между всяка стъпка → HTTP POST)
+    │   (между всяка стъпка → status update)
     │           ↓
     ├── ← GET /webhook/job-status?jobId=X ──→ 09 Status API
     ├── ← GET /webhook/preview?jobId=X    ──→ 09 Status API
     └── ← GET /webhook/download?jobId=X   ──→ 09 Status API
 ```
 
+> 📌 **Забележка**: Текстовото извличане (01) се изпълнява inline в оркестратора (Split Binary → Extract PDF → Merge). Workflow 01 съществува като самостоятелен webhook за директно тестване.
+
 ## 📦 Workflow-и
 
 | # | Файл | Описание | AI модел |
 |---|------|----------|----------|
-| 00 | `00-orchestrator.json` | Главен координатор — приема файлове, вика под-workflow-и последователно, обновява статус | — |
+| 00 | `00-orchestrator.json` | Главен координатор — приема файлове, извлича текст inline, вика 02-07 чрез HTTP Request | — |
 | 01 | `01-extract-text.json` | Извлича текст от PDF/DOCX файлове | — |
 | 02 | `02-extract-requirements.json` | Извлича всички изисквания от документацията | Claude Sonnet 4 |
 | 03 | `03-analyze-spec.json` | Анализира техническата спецификация | Claude Sonnet 4 |
@@ -58,41 +61,21 @@ Frontend (GitHub Pages)
 
 > ⚠️ OpenRouter е OpenAI-съвместим. Използваме OpenAI credential с променен Base URL.
 
-### Стъпка 2: Импортиране на workflow-ите (редът е ВАЖЕН!)
+### Стъпка 2: Импортиране на workflow-ите
 
-Импортирайте в този ред, за да може по-лесно да свържете ID-тата:
+Импортирайте всички workflow-и в n8n (редът не е от значение — няма workflow ID зависимости):
 
-1. **Първо** — импортирайте **под-workflow-ите** (01–07 и 09):
-   - `09-status-api.json`
-   - `01-extract-text.json`
-   - `02-extract-requirements.json`
-   - `03-analyze-spec.json`
-   - `04-plan-document.json`
-   - `05-write-document.json`
-   - `06-validate-document.json`
-   - `07-finalize-document.json`
+1. `09-status-api.json` — REST API за статус
+2. `01-extract-text.json` — Самостоятелен webhook за извличане на текст
+3. `02-extract-requirements.json` — Webhook за извличане на изисквания
+4. `03-analyze-spec.json` — Webhook за анализ на спецификация
+5. `04-plan-document.json` — Webhook за планиране
+6. `05-write-document.json` — Webhook за писане
+7. `06-validate-document.json` — Webhook за валидация
+8. `07-finalize-document.json` — Webhook за финализиране
+9. `00-orchestrator.json` — Главен координатор
 
-2. **Последно** — импортирайте **00-orchestrator.json**
-
-### Стъпка 3: Свържете Workflow ID-та в Orchestrator-а
-
-След импортиране, всеки workflow получава уникално ID. Трябва да ги въведете в Orchestrator-а:
-
-1. Отворете всеки импортиран workflow и запишете ID-то му (от URL-а: `/workflow/XXXX`)
-2. Отворете **00 Orchestrator**
-3. Намерете всеки **Execute Sub-workflow** node и попълнете правилното ID:
-
-| Node в Orchestrator-а | Workflow ID за |
-|----------------------|----------------|
-| `Extract Text` | ID на `TP - Step 1: Extract Text` |
-| `Extract Requirements` | ID на `TP - Step 2: Extract Requirements` |
-| `Analyze Spec` | ID на `TP - Step 3: Analyze Spec` |
-| `Plan Document` | ID на `TP - Step 4: Plan Document` |
-| `Write Document` | ID на `TP - Step 5: Write Document` |
-| `Validate Document` | ID на `TP - Step 6: Validate Document` |
-| `Finalize Document` | ID на `TP - Step 7: Finalize Document` |
-
-> 💡 **Съвет**: В n8n, може да изберете workflow-а от падащ списък вместо да поставяте ID ръчно. Кликнете на Execute Sub-workflow node → Source: Database → From list → изберете правилния workflow.
+> 💡 Не е нужно да свързвате Workflow ID-та! Оркестраторът вика под-workflow-ите чрез HTTP Request POST към техните webhook endpoints.
 
 ### Стъпка 4: Свържете credentials за LLM nodes
 
@@ -116,9 +99,27 @@ Frontend (GitHub Pages)
 
 ### Стъпка 5: Активиране
 
-1. Активирайте **09-status-api** — ПЪРВО (Orchestrator-ът праща status updates към него)
-2. Активирайте **00-orchestrator** — ВТОРО
-3. Под-workflow-ите (01–07) НЕ е нужно да се активират — те се викат директно от Orchestrator-а
+**ВСИЧКИ workflow-и трябва да бъдат активирани**, за да са достъпни техните webhook endpoints!
+
+1. Активирайте **09-status-api** — ПЪРВО
+2. Активирайте **02 до 07** — под-workflow-ите (те имат webhook endpoints, които оркестраторът вика)
+3. Активирайте **00-orchestrator** — ПОСЛЕДНО
+4. Workflow **01** е опционален — активирайте го само ако искате да тествате извличане на текст директно
+
+> ⚠️ Ако под-workflow (02-07) НЕ е активиран, оркестраторът ще получи грешка при HTTP Request!
+
+**Webhook endpoints след активиране:**
+
+| Workflow | Webhook path |
+|----------|--------------|
+| 00 | `/webhook/tp-generate` |
+| 01 | `/webhook/tp-step-01-extract` |
+| 02 | `/webhook/tp-step-02-requirements` |
+| 03 | `/webhook/tp-step-03-analyze` |
+| 04 | `/webhook/tp-step-04-plan` |
+| 05 | `/webhook/tp-step-05-write` |
+| 06 | `/webhook/tp-step-06-validate` |
+| 07 | `/webhook/tp-step-07-finalize` |
 
 ### Стъпка 6: Конфигурация на Frontend
 
@@ -134,38 +135,37 @@ const CONFIG = {
 ```
 Webhook (FormData: contractor JSON + PDF бинарни файлове)
   │
-  ├─→ 01 Extract Text
-  │     Input:  binary { documentation, specification }
+  ├─→ (inline) Split Binary → Extract PDF → Merge Texts
   │     Output: { fullText, documentCount, totalCharacters }
   │
-  ├─→ 02 Extract Requirements
+  ├─→ HTTP POST → 02 Extract Requirements
   │     Input:  { fullText }
   │     Output: { requirements: { ... } }
   │
-  ├─→ 03 Analyze Spec
+  ├─→ HTTP POST → 03 Analyze Spec
   │     Input:  { fullText }
   │     Output: { specData: { ... } }
   │
-  ├─→ 04 Plan Document
+  ├─→ HTTP POST → 04 Plan Document
   │     Input:  { requirements, specData, contractorInfo }
   │     Output: { documentPlan: { ... } }
   │
-  ├─→ 05 Write Document
+  ├─→ HTTP POST → 05 Write Document
   │     Input:  { requirements, specData, contractorInfo, documentPlan }
   │     Output: { draftText, stats }
   │
-  ├─→ 06 Validate Document
+  ├─→ HTTP POST → 06 Validate Document
   │     Input:  { draftText, requirements, specData }
   │     Output: { validationPassed, completenessResult, relevanceResult, rewriteInstructions }
   │
-  └─→ 07 Finalize Document
+  └─→ HTTP POST → 07 Finalize Document
         Input:  { draftText, validationFeedback }
         Output: { finalText, stats }
 ```
 
 ## 📡 API Endpoints
 
-### POST `/webhook/generate-proposal`
+### POST `/webhook/tp-generate`
 **Тяло**: `multipart/form-data`
 
 | Поле | Тип | Описание |
@@ -212,22 +212,20 @@ await fetch('https://n8n.simeontsvetanovn8nworkflows.site/webhook/internal/updat
 
 ### Тестване на отделен под-workflow
 
-Всеки workflow може да се тества независимо:
-
-1. Отворете желания workflow в n8n
-2. Натиснете **Test Workflow**
-3. Задайте тестови входни данни чрез Manual Trigger или директно в Execute Workflow Trigger
+Всеки workflow може да се тества чрез POST към неговия webhook:
 
 **Примерен тест за 02-extract-requirements:**
-```json
-{
-  "fullText": "1. Изпълнителят трябва да представи работна програма... 2. Организация на строителната площадка..."
-}
+```bash
+curl -X POST https://n8n.simeontsvetanovn8nworkflows.site/webhook/tp-step-02-requirements \
+  -H 'Content-Type: application/json' \
+  -d '{"fullText": "1. Изпълнителят трябва да представи работна програма..."}'
 ```
+
+> ⚠️ За тестване: при неактивиран workflow, ползвайте `/webhook-test/` вместо `/webhook/`
 
 ### Тестване на целия pipeline
 ```bash
-curl -X POST https://n8n.simeontsvetanovn8nworkflows.site/webhook/generate-proposal \
+curl -X POST https://n8n.simeontsvetanovn8nworkflows.site/webhook/tp-generate \
   -F 'contractor={"name":"Барин АЛП ЕООД","city":"Смолян","manager":"Георги Писков"}' \
   -F "documentation=@path/to/Dokumentacia.pdf" \
   -F "specification=@path/to/Specifikacia.pdf"
@@ -241,8 +239,9 @@ curl "https://n8n.simeontsvetanovn8nworkflows.site/webhook/job-status?jobId=tp_1
 ## ⚠️ Важни бележки
 
 ### Binary данни
-- `01-extract-text` очаква binary файлове в полета `documentation` и/или `specification`
-- Code node в workflow 01 преименува бинарните полета на `data` за `Extract from File` node
+- Оркестраторът извършва PDF извличане inline (Split Binary → Extract from PDF → Merge)
+- Workflow 01 е самостоятелен webhook за директно тестване на PDF извличане
+- Code nodes преименуват бинарните полета на `data` за `Extract from File` node
 
 ### Лимити
 - n8n webhook: 16MB по подразбиране (`N8N_PAYLOAD_SIZE_MAX`)
@@ -264,7 +263,7 @@ curl "https://n8n.simeontsvetanovn8nworkflows.site/webhook/job-status?jobId=tp_1
 ```
 n8n/
 ├── workflows/
-│   ├── 00-orchestrator.json          # Координатор — вика под-workflow-и
+│   ├── 00-orchestrator.json          # Координатор — inline PDF + HTTP Request към 02-07
 │   ├── 01-extract-text.json          # PDF → текст
 │   ├── 02-extract-requirements.json  # Текст → изисквания (Claude Sonnet)
 │   ├── 03-analyze-spec.json          # Текст → тех. параметри (Claude Sonnet)

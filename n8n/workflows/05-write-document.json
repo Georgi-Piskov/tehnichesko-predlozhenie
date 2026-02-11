@@ -2,14 +2,18 @@
   "name": "TP - Step 5: Write Document",
   "nodes": [
     {
-      "id": "trigger",
-      "name": "Start",
-      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
       "position": [0, 300],
+      "webhookId": "tp-step-05-write",
       "parameters": {
-        "inputSource": "passthrough"
+        "httpMethod": "POST",
+        "path": "tp-step-05-write",
+        "responseMode": "responseNode",
+        "options": {}
       },
-      "typeVersion": 1.1
+      "typeVersion": 2
     },
     {
       "id": "prep",
@@ -17,7 +21,7 @@
       "type": "n8n-nodes-base.code",
       "position": [250, 300],
       "parameters": {
-        "jsCode": "const { requirements, specData, contractorInfo, documentPlan } = $json;\n\n// Build section-by-section writing instructions\nconst sections = documentPlan?.sections || [];\nlet sectionGuide = '';\nfor (const sec of sections) {\n  sectionGuide += `\\n### ${sec.id}. ${sec.title} (~${sec.estimated_pages || 5} стр.)\\n`;\n  if (sec.subsections) {\n    for (const sub of sec.subsections) {\n      sectionGuide += `  ${sub.id}. ${sub.title} (~${sub.estimated_pages || 2} стр.)\\n`;\n      if (sub.content_guidance) sectionGuide += `    Указания: ${sub.content_guidance.join('; ')}\\n`;\n      if (sub.spec_data_to_use) sectionGuide += `    Данни от спец.: ${sub.spec_data_to_use.join('; ')}\\n`;\n    }\n  }\n}\n\nconst prompt = `Ти си експерт по технически предложения за обществени поръчки в България.\n\n## ИЗИСКВАНИЯ ОТ ДОКУМЕНТАЦИЯТА:\n${JSON.stringify(requirements, null, 2).substring(0, 25000)}\n\n## ТЕХНИЧЕСКИ ПАРАМЕТРИ ОТ СПЕЦИФИКАЦИЯТА:\n${JSON.stringify(specData, null, 2).substring(0, 25000)}\n\n## ИНФОРМАЦИЯ ЗА ИЗПЪЛНИТЕЛЯ:\n${JSON.stringify(contractorInfo, null, 2)}\n\n## ПЛАН НА ДОКУМЕНТА (следвай точно):\n${sectionGuide.substring(0, 15000)}\n\n## ПРАВИЛА ЗА ПИСАНЕ:\n\n1. **Конкретност** — всяко твърдение ТРЯБВА да е обвързано с конкретната поръчка, обекта, техническата спецификация\n2. **Структура КАКВО-КАК-С КАКВО-КОЙ-КОНТРОЛ** при всяка дейност\n3. **Нормативни препратки** — ЗУТ, Наредба №3/2003, Наредба №2/2003, БДС EN стандарти\n4. **Таблици** — организационни структури, оборудване, графици, контролни планове\n5. **Обем** — 1 страница ≈ 350-400 думи. Целеви обем: ${documentPlan?.total_estimated_pages || 75} страници\n6. **Placeholders** — когато конкретна информация трябва да се попълни:\n   [⚠️ ПОПЪЛНЕТЕ: Какво точно]\n\n## ЗАБРАНЕНО:\n- Общи фрази без конкретика (\"ще осигурим високо качество\")\n- Текст, приложим за всяка поръчка без промяна\n- Измислени конкретни данни (имена, дати, номера)\n- Повторения между секции\n\n## ФОРМАТ:\nВърни целия документ като чист Markdown с:\n- Номерирани заглавия (# 1. ..., ## 1.1. ...)\n- Таблици в Markdown формат\n- Placeholders [⚠️ ПОПЪЛНЕТЕ: ...] където е необходимо\n\nЗапочни писането сега. Напиши ЦЕЛИЯ документ от начало до край.`;\n\nreturn [{ json: { prompt } }];"
+        "jsCode": "const { requirements, specData, contractorInfo, documentPlan } = $json;\n\nconst sections = documentPlan?.sections || [];\nlet sectionGuide = '';\nfor (const sec of sections) {\n  sectionGuide += `\\n### ${sec.id}. ${sec.title} (~${sec.estimated_pages || 5} стр.)\\n`;\n  if (sec.subsections) {\n    for (const sub of sec.subsections) {\n      sectionGuide += `  ${sub.id}. ${sub.title} (~${sub.estimated_pages || 2} стр.)\\n`;\n      if (sub.content_guidance) sectionGuide += `    Указания: ${sub.content_guidance.join('; ')}\\n`;\n      if (sub.spec_data_to_use) sectionGuide += `    Данни от спец.: ${sub.spec_data_to_use.join('; ')}\\n`;\n    }\n  }\n}\n\nconst prompt = `Ти си експерт по технически предложения за обществени поръчки в България.\n\n## ИЗИСКВАНИЯ ОТ ДОКУМЕНТАЦИЯТА:\n${JSON.stringify(requirements, null, 2).substring(0, 25000)}\n\n## ТЕХНИЧЕСКИ ПАРАМЕТРИ ОТ СПЕЦИФИКАЦИЯТА:\n${JSON.stringify(specData, null, 2).substring(0, 25000)}\n\n## ИНФОРМАЦИЯ ЗА ИЗПЪЛНИТЕЛЯ:\n${JSON.stringify(contractorInfo, null, 2)}\n\n## ПЛАН НА ДОКУМЕНТА (следвай точно):\n${sectionGuide.substring(0, 15000)}\n\n## ПРАВИЛА ЗА ПИСАНЕ:\n\n1. **Конкретност** — всяко твърдение ТРЯБВА да е обвързано с конкретната поръчка, обекта, техническата спецификация\n2. **Структура КАКВО-КАК-С КАКВО-КОЙ-КОНТРОЛ** при всяка дейност\n3. **Нормативни препратки** — ЗУТ, Наредба №3/2003, Наредба №2/2003, БДС EN стандарти\n4. **Таблици** — организационни структури, оборудване, графици, контролни планове\n5. **Обем** — 1 страница ≈ 350-400 думи. Целеви обем: ${documentPlan?.total_estimated_pages || 75} страници\n6. **Placeholders** — когато конкретна информация трябва да се попълни:\n   [⚠️ ПОПЪЛНЕТЕ: Какво точно]\n\n## ЗАБРАНЕНО:\n- Общи фрази без конкретика (\"ще осигурим високо качество\")\n- Текст, приложим за всяка поръчка без промяна\n- Измислени конкретни данни (имена, дати, номера)\n- Повторения между секции\n\n## ФОРМАТ:\nВърни целия документ като чист Markdown с:\n- Номерирани заглавия (# 1. ..., ## 1.1. ...)\n- Таблици в Markdown формат\n- Placeholders [⚠️ ПОПЪЛНЕТЕ: ...] където е необходимо\n\nЗапочни писането сега. Напиши ЦЕЛИЯ документ от начало до край.`;\n\nreturn [{ json: { prompt } }];"
       },
       "typeVersion": 2
     },
@@ -64,13 +68,25 @@
         "jsCode": "const draftText = ($json.text || $json.response || '').trim();\nconst wordCount = draftText.split(/\\s+/).length;\nconst estimatedPages = Math.round(wordCount / 375);\nconst placeholderCount = (draftText.match(/\\[⚠️ ПОПЪЛНЕТЕ:/g) || []).length;\n\nreturn [{\n  json: {\n    draftText,\n    stats: {\n      wordCount,\n      estimatedPages,\n      placeholderCount,\n      charCount: draftText.length\n    }\n  }\n}];"
       },
       "typeVersion": 2
+    },
+    {
+      "id": "respond",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [1060, 300],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "typeVersion": 1.1
     }
   ],
   "connections": {
-    "Start": { "main": [[{ "node": "Prepare Prompt", "type": "main", "index": 0 }]] },
+    "Webhook": { "main": [[{ "node": "Prepare Prompt", "type": "main", "index": 0 }]] },
     "Prepare Prompt": { "main": [[{ "node": "Write Full Document", "type": "main", "index": 0 }]] },
     "Claude Sonnet": { "ai_languageModel": [[{ "node": "Write Full Document", "type": "ai_languageModel", "index": 0 }]] },
-    "Write Full Document": { "main": [[{ "node": "Format Output", "type": "main", "index": 0 }]] }
+    "Write Full Document": { "main": [[{ "node": "Format Output", "type": "main", "index": 0 }]] },
+    "Format Output": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] }
   },
   "settings": { "executionOrder": "v1" }
 }

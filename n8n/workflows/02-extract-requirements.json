@@ -2,14 +2,18 @@
   "name": "TP - Step 2: Extract Requirements",
   "nodes": [
     {
-      "id": "trigger",
-      "name": "Start",
-      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
       "position": [0, 300],
+      "webhookId": "tp-step-02-requirements",
       "parameters": {
-        "inputSource": "passthrough"
+        "httpMethod": "POST",
+        "path": "tp-step-02-requirements",
+        "responseMode": "responseNode",
+        "options": {}
       },
-      "typeVersion": 1.1
+      "typeVersion": 2
     },
     {
       "id": "llm",
@@ -51,15 +55,27 @@
       "type": "n8n-nodes-base.code",
       "position": [600, 300],
       "parameters": {
-        "jsCode": "const raw = ($json.text || $json.response || '').trim();\nlet result;\n\ntry {\n  result = JSON.parse(raw);\n} catch (e) {\n  // Try extracting from code block\n  const m = raw.match(/```(?:json)?\\s*([\\s\\S]*?)```/);\n  const candidate = m ? m[1].trim() : raw;\n  try {\n    const s = candidate.indexOf('{');\n    const e2 = candidate.lastIndexOf('}');\n    let jsonStr = candidate.substring(s, e2 + 1);\n    jsonStr = jsonStr.replace(/,\\s*([\\]\\}])/g, '$1');\n    result = JSON.parse(jsonStr);\n  } catch (e3) {\n    // Fallback: regex extract key fields\n    const subj = raw.match(/procurement_subject[\":\\s]+[\"']([^\"']+)/);\n    result = {\n      proposal_type: 'Техническо предложение',\n      procurement_subject: subj ? subj[1] : 'Не е разпознато',\n      requirements: [],\n      _parse_error: 'JSON parse failed, raw response stored',\n      _raw: raw.substring(0, 2000)\n    };\n  }\n}\n\nreturn [{ json: { requirements: result } }];"
+        "jsCode": "const raw = ($json.text || $json.response || '').trim();\nlet result;\n\ntry {\n  result = JSON.parse(raw);\n} catch (e) {\n  const m = raw.match(/```(?:json)?\\s*([\\s\\S]*?)```/);\n  const candidate = m ? m[1].trim() : raw;\n  try {\n    const s = candidate.indexOf('{');\n    const e2 = candidate.lastIndexOf('}');\n    let jsonStr = candidate.substring(s, e2 + 1);\n    jsonStr = jsonStr.replace(/,\\s*([\\]\\}])/g, '$1');\n    result = JSON.parse(jsonStr);\n  } catch (e3) {\n    const subj = raw.match(/procurement_subject[\":\\s]+[\"']([^\"']+)/);\n    result = {\n      proposal_type: 'Техническо предложение',\n      procurement_subject: subj ? subj[1] : 'Не е разпознато',\n      requirements: [],\n      _parse_error: 'JSON parse failed, raw response stored',\n      _raw: raw.substring(0, 2000)\n    };\n  }\n}\n\nreturn [{ json: { requirements: result } }];"
       },
       "typeVersion": 2
+    },
+    {
+      "id": "respond",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [900, 300],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "typeVersion": 1.1
     }
   ],
   "connections": {
-    "Start": { "main": [[{ "node": "Extract Requirements", "type": "main", "index": 0 }]] },
+    "Webhook": { "main": [[{ "node": "Extract Requirements", "type": "main", "index": 0 }]] },
     "Claude Sonnet": { "ai_languageModel": [[{ "node": "Extract Requirements", "type": "ai_languageModel", "index": 0 }]] },
-    "Extract Requirements": { "main": [[{ "node": "Parse Requirements", "type": "main", "index": 0 }]] }
+    "Extract Requirements": { "main": [[{ "node": "Parse Requirements", "type": "main", "index": 0 }]] },
+    "Parse Requirements": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] }
   },
   "settings": { "executionOrder": "v1" }
 }

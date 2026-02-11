@@ -2,14 +2,18 @@
   "name": "TP - Step 6: Validate Document",
   "nodes": [
     {
-      "id": "trigger",
-      "name": "Start",
-      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
       "position": [0, 300],
+      "webhookId": "tp-step-06-validate",
       "parameters": {
-        "inputSource": "passthrough"
+        "httpMethod": "POST",
+        "path": "tp-step-06-validate",
+        "responseMode": "responseNode",
+        "options": {}
       },
-      "typeVersion": 1.1
+      "typeVersion": 2
     },
     {
       "id": "completeness_llm",
@@ -108,10 +112,21 @@
         "jsCode": "const items = $input.all();\nconst completeness = items.find(i => i.json.completenessResult)?.json?.completenessResult || {};\nconst relevance = items.find(i => i.json.relevanceResult)?.json?.relevanceResult || {};\n\nconst passed = (completeness.overall_verdict === 'PASS') && (relevance.overall_verdict === 'PASS');\n\nlet rewriteInstructions = '';\nif (!passed) {\n  const parts = [];\n  if (completeness.overall_verdict !== 'PASS') {\n    parts.push('ПРОПУСКИ В ПОКРИТИЕТО:');\n    if (completeness.critical_gaps) parts.push(completeness.critical_gaps.join('; '));\n    if (completeness.rewrite_instructions) parts.push(completeness.rewrite_instructions);\n  }\n  if (relevance.overall_verdict !== 'PASS') {\n    parts.push('ПРОБЛЕМИ С РЕЛЕВАНТНОСТТА:');\n    if (relevance.rewrite_instructions) parts.push(relevance.rewrite_instructions);\n    if (relevance.consistency_issues) {\n      for (const ci of relevance.consistency_issues) {\n        parts.push(`Текстът казва: ${ci.text_says} | Спец. казва: ${ci.spec_says} | Решение: ${ci.resolution}`);\n      }\n    }\n  }\n  rewriteInstructions = parts.join('\\n');\n}\n\nreturn [{\n  json: {\n    validationPassed: passed,\n    completenessResult: completeness,\n    relevanceResult: relevance,\n    coverageScore: completeness.coverage_score || 0,\n    relevanceScore: relevance.relevance_score || 0,\n    rewriteInstructions\n  }\n}];"
       },
       "typeVersion": 2
+    },
+    {
+      "id": "respond",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [1200, 360],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "typeVersion": 1.1
     }
   ],
   "connections": {
-    "Start": {
+    "Webhook": {
       "main": [
         [
           { "node": "Check Completeness", "type": "main", "index": 0 },
@@ -124,7 +139,8 @@
     "Check Completeness": { "main": [[{ "node": "Parse Completeness", "type": "main", "index": 0 }]] },
     "Check Relevance": { "main": [[{ "node": "Parse Relevance", "type": "main", "index": 0 }]] },
     "Parse Completeness": { "main": [[{ "node": "Merge Results", "type": "main", "index": 0 }]] },
-    "Parse Relevance": { "main": [[{ "node": "Merge Results", "type": "main", "index": 0 }]] }
+    "Parse Relevance": { "main": [[{ "node": "Merge Results", "type": "main", "index": 0 }]] },
+    "Merge Results": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] }
   },
   "settings": { "executionOrder": "v1" }
 }

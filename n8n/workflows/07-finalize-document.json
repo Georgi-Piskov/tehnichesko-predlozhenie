@@ -2,14 +2,18 @@
   "name": "TP - Step 7: Finalize Document",
   "nodes": [
     {
-      "id": "trigger",
-      "name": "Start",
-      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
       "position": [0, 300],
+      "webhookId": "tp-step-07-finalize",
       "parameters": {
-        "inputSource": "passthrough"
+        "httpMethod": "POST",
+        "path": "tp-step-07-finalize",
+        "responseMode": "responseNode",
+        "options": {}
       },
-      "typeVersion": 1.1
+      "typeVersion": 2
     },
     {
       "id": "llm",
@@ -51,15 +55,27 @@
       "type": "n8n-nodes-base.code",
       "position": [600, 300],
       "parameters": {
-        "jsCode": "const raw = ($json.text || $json.response || '').trim();\n\n// Try to separate the markdown from the JSON stats block\nlet finalText = raw;\nlet stats = {};\n\n// Look for JSON block at the end\nconst jsonMatch = raw.match(/```(?:json)?\\s*(\\{[\\s\\S]*?\\})\\s*```\\s*$/);\nif (jsonMatch) {\n  finalText = raw.substring(0, jsonMatch.index).trim();\n  try {\n    stats = JSON.parse(jsonMatch[1]);\n  } catch (e) {\n    // ignore parse error\n  }\n}\n\n// Calculate stats if not provided\nconst wordCount = finalText.split(/\\s+/).length;\nconst estimatedPages = Math.round(wordCount / 375);\nconst placeholderCount = (finalText.match(/\\[⚠️ ПОПЪЛНЕТЕ:/g) || []).length;\n\nstats = {\n  ...stats,\n  wordCount: stats.word_count || wordCount,\n  estimatedPages: stats.estimated_pages || estimatedPages,\n  placeholderCount: stats.total_placeholders || placeholderCount,\n  charCount: finalText.length\n};\n\nreturn [{\n  json: {\n    finalText,\n    stats\n  }\n}];"
+        "jsCode": "const raw = ($json.text || $json.response || '').trim();\n\nlet finalText = raw;\nlet stats = {};\n\nconst jsonMatch = raw.match(/```(?:json)?\\s*(\\{[\\s\\S]*?\\})\\s*```\\s*$/);\nif (jsonMatch) {\n  finalText = raw.substring(0, jsonMatch.index).trim();\n  try {\n    stats = JSON.parse(jsonMatch[1]);\n  } catch (e) {}\n}\n\nconst wordCount = finalText.split(/\\s+/).length;\nconst estimatedPages = Math.round(wordCount / 375);\nconst placeholderCount = (finalText.match(/\\[⚠️ ПОПЪЛНЕТЕ:/g) || []).length;\n\nstats = {\n  ...stats,\n  wordCount: stats.word_count || wordCount,\n  estimatedPages: stats.estimated_pages || estimatedPages,\n  placeholderCount: stats.total_placeholders || placeholderCount,\n  charCount: finalText.length\n};\n\nreturn [{\n  json: {\n    finalText,\n    stats\n  }\n}];"
       },
       "typeVersion": 2
+    },
+    {
+      "id": "respond",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [900, 300],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "typeVersion": 1.1
     }
   ],
   "connections": {
-    "Start": { "main": [[{ "node": "Final Edit", "type": "main", "index": 0 }]] },
+    "Webhook": { "main": [[{ "node": "Final Edit", "type": "main", "index": 0 }]] },
     "Claude Opus": { "ai_languageModel": [[{ "node": "Final Edit", "type": "ai_languageModel", "index": 0 }]] },
-    "Final Edit": { "main": [[{ "node": "Process Result", "type": "main", "index": 0 }]] }
+    "Final Edit": { "main": [[{ "node": "Process Result", "type": "main", "index": 0 }]] },
+    "Process Result": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] }
   },
   "settings": { "executionOrder": "v1" }
 }
