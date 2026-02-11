@@ -1,0 +1,63 @@
+{
+  "name": "TP - Step 2: Extract Requirements",
+  "nodes": [
+    {
+      "id": "trigger",
+      "name": "Start",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "position": [0, 300],
+      "parameters": {},
+      "typeVersion": 1
+    },
+    {
+      "id": "llm",
+      "name": "Extract Requirements",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "position": [300, 300],
+      "parameters": {
+        "text": "=Ти си експерт по българско законодателство за обществени поръчки (ЗОП, ППЗОП).\n\nЗадача: Извлечи АБСОЛЮТНО ВСИЧКИ изисквания за техническото предложение от документацията.\n\nИзвлечи:\n1. Основни критерии за оценка — номерираните изисквания\n2. Подточки — ако изискването казва \"опишете X, включително а), б), в)\" — всяка подточка ОТДЕЛНО\n3. Методика на оценяване — как се оценява, какво дава максимум точки\n4. Формат и ограничения — лимит на страници, задължителни приложения\n5. Кръстосани препратки — \"виж Техническата спецификация за X\"\n\nВърни САМО валиден JSON (без markdown, без обяснения):\n{\n  \"proposal_type\": \"Техническо предложение | Работна програма | Концепция\",\n  \"procurement_subject\": \"Пълно наименование\",\n  \"contracting_authority\": \"Възложител\",\n  \"requirements\": [\n    {\n      \"id\": \"1\",\n      \"title\": \"Заглавие\",\n      \"full_text\": \"Дословен текст\",\n      \"sub_requirements\": [{\"id\": \"1.1\", \"text\": \"Дословен текст\"}],\n      \"scoring\": {\"max_points\": 100, \"criteria\": \"Описание\"}\n    }\n  ],\n  \"format_requirements\": {\"page_limit\": null, \"attachments\": [], \"instructions\": []},\n  \"references_to_spec\": []\n}\n\nПравила:\n- ДОСЛОВНО копиране на текста\n- Пропускането на подточка = ДИСКВАЛИФИКАЦИЯ\n- Запази оригиналната номерация\n- САМО JSON, без друг текст\n\nДОКУМЕНТАЦИЯ:\n{{ $json.fullText.substring(0, 80000) }}",
+        "promptType": "define",
+        "messages": {
+          "messageValues": [
+            {
+              "type": "system",
+              "message": "You are an expert in Bulgarian public procurement law. You extract requirements with surgical precision. You NEVER miss a sub-requirement. You output ONLY valid JSON, no markdown blocks, no explanations. Language: Bulgarian."
+            }
+          ]
+        }
+      },
+      "typeVersion": 1.4
+    },
+    {
+      "id": "model",
+      "name": "Claude Sonnet",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "position": [220, 520],
+      "parameters": {
+        "model": "anthropic/claude-sonnet-4-20250514",
+        "options": {
+          "baseURL": "https://openrouter.ai/api/v1",
+          "maxTokens": 16000,
+          "temperature": 0.1
+        }
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "parse",
+      "name": "Parse Requirements",
+      "type": "n8n-nodes-base.code",
+      "position": [600, 300],
+      "parameters": {
+        "jsCode": "const raw = ($json.text || $json.response || '').trim();\nlet result;\n\ntry {\n  result = JSON.parse(raw);\n} catch (e) {\n  // Try extracting from code block\n  const m = raw.match(/```(?:json)?\\s*([\\s\\S]*?)```/);\n  const candidate = m ? m[1].trim() : raw;\n  try {\n    const s = candidate.indexOf('{');\n    const e2 = candidate.lastIndexOf('}');\n    let jsonStr = candidate.substring(s, e2 + 1);\n    jsonStr = jsonStr.replace(/,\\s*([\\]\\}])/g, '$1');\n    result = JSON.parse(jsonStr);\n  } catch (e3) {\n    // Fallback: regex extract key fields\n    const subj = raw.match(/procurement_subject[\":\\s]+[\"']([^\"']+)/);\n    result = {\n      proposal_type: 'Техническо предложение',\n      procurement_subject: subj ? subj[1] : 'Не е разпознато',\n      requirements: [],\n      _parse_error: 'JSON parse failed, raw response stored',\n      _raw: raw.substring(0, 2000)\n    };\n  }\n}\n\nreturn [{ json: { requirements: result } }];"
+      },
+      "typeVersion": 2
+    }
+  ],
+  "connections": {
+    "Start": { "main": [[{ "node": "Extract Requirements", "type": "main", "index": 0 }]] },
+    "Claude Sonnet": { "ai_languageModel": [[{ "node": "Extract Requirements", "type": "ai_languageModel", "index": 0 }]] },
+    "Extract Requirements": { "main": [[{ "node": "Parse Requirements", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

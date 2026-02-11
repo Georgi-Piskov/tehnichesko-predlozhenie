@@ -1,0 +1,63 @@
+{
+  "name": "TP - Step 4: Plan Document",
+  "nodes": [
+    {
+      "id": "trigger",
+      "name": "Start",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "position": [0, 300],
+      "parameters": {},
+      "typeVersion": 1
+    },
+    {
+      "id": "llm",
+      "name": "Plan Document",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "position": [300, 300],
+      "parameters": {
+        "text": "=Ти си експерт по структуриране на технически предложения за обществени поръчки.\n\nПолучаваш:\n\nИЗВЛЕЧЕНИ ИЗИСКВАНИЯ:\n{{ JSON.stringify($json.requirements, null, 2) }}\n\nАНАЛИЗ НА СПЕЦИФИКАЦИЯТА:\n{{ JSON.stringify($json.specData, null, 2) }}\n\nИНФОРМАЦИЯ ЗА ИЗПЪЛНИТЕЛЯ:\n{{ JSON.stringify($json.contractorInfo, null, 2) }}\n\nСъздай детайлен план на документа с 100% покритие.\n\nВърни САМО валиден JSON:\n{\n  \"document_title\": \"ТЕХНИЧЕСКО ПРЕДЛОЖЕНИЕ за [тема]\",\n  \"total_estimated_pages\": 75,\n  \"sections\": [\n    {\n      \"id\": \"1\",\n      \"title\": \"Заглавие\",\n      \"requirement_id\": \"1\",\n      \"estimated_pages\": 10,\n      \"subsections\": [\n        {\n          \"id\": \"1.1\",\n          \"title\": \"Подзаглавие\",\n          \"requirement_id\": \"1.1\",\n          \"estimated_pages\": 3,\n          \"content_guidance\": [\"Какво да се напише\"],\n          \"spec_data_to_use\": [\"Кои данни от спецификацията\"],\n          \"tables_needed\": [{\"title\": \"\", \"columns\": []}]\n        }\n      ]\n    }\n  ],\n  \"appendices\": [{\"title\": \"\", \"description\": \"\"}]\n}\n\nПравила:\n- Една секция за ВСЯКО изискване, без изключения\n- Подсекции за подизисквания\n- Реалистичен обем: 50-100 страници\n- КОНКРЕТНИ указания, не \"опишете подхода\"\n- САМО JSON, без друг текст",
+        "promptType": "define",
+        "messages": {
+          "messageValues": [
+            {
+              "type": "system",
+              "message": "You create comprehensive document plans for Bulgarian public procurement proposals with 100% requirement coverage. Output ONLY valid JSON. Language: Bulgarian."
+            }
+          ]
+        }
+      },
+      "typeVersion": 1.4
+    },
+    {
+      "id": "model",
+      "name": "Claude Sonnet",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "position": [220, 520],
+      "parameters": {
+        "model": "anthropic/claude-sonnet-4-20250514",
+        "options": {
+          "baseURL": "https://openrouter.ai/api/v1",
+          "maxTokens": 16000,
+          "temperature": 0.2
+        }
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "parse",
+      "name": "Parse Plan",
+      "type": "n8n-nodes-base.code",
+      "position": [600, 300],
+      "parameters": {
+        "jsCode": "const raw = ($json.text || $json.response || '').trim();\nlet result;\n\ntry {\n  result = JSON.parse(raw);\n} catch (e) {\n  const m = raw.match(/```(?:json)?\\s*([\\s\\S]*?)```/);\n  const candidate = m ? m[1].trim() : raw;\n  try {\n    const s = candidate.indexOf('{');\n    const e2 = candidate.lastIndexOf('}');\n    let jsonStr = candidate.substring(s, e2 + 1);\n    jsonStr = jsonStr.replace(/,\\s*([\\]\\}])/g, '$1');\n    result = JSON.parse(jsonStr);\n  } catch (e3) {\n    result = { document_title: 'Parse error', sections: [], _raw: raw.substring(0, 2000) };\n  }\n}\n\nreturn [{ json: { documentPlan: result } }];"
+      },
+      "typeVersion": 2
+    }
+  ],
+  "connections": {
+    "Start": { "main": [[{ "node": "Plan Document", "type": "main", "index": 0 }]] },
+    "Claude Sonnet": { "ai_languageModel": [[{ "node": "Plan Document", "type": "ai_languageModel", "index": 0 }]] },
+    "Plan Document": { "main": [[{ "node": "Parse Plan", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

@@ -1,0 +1,245 @@
+{
+  "name": "TP - 00 Orchestrator",
+  "nodes": [
+    {
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "position": [0, 300],
+      "webhookId": "generate-proposal",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "generate-proposal",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "init",
+      "name": "Init Job",
+      "type": "n8n-nodes-base.code",
+      "position": [280, 300],
+      "parameters": {
+        "jsCode": "// Parse contractor info (sent as JSON string in FormData)\nconst rawContractor = $json.contractor || '{}';\nlet contractorInfo;\ntry {\n  contractorInfo = typeof rawContractor === 'string' ? JSON.parse(rawContractor) : rawContractor;\n} catch (e) {\n  contractorInfo = { name: 'Неуспешно разпознаване' };\n}\n\n// Generate unique job ID\nconst jobId = 'tp_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);\n\n// Pass through binary files\nreturn [{\n  json: {\n    jobId,\n    contractorInfo,\n    additionalNotes: $json.additionalNotes || ''\n  },\n  binary: $input.first().binary\n}];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "respond",
+      "name": "Send Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [560, 300],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, jobId: $json.jobId, message: 'Генерирането стартира' } }}"
+      },
+      "typeVersion": 1.1
+    },
+    {
+      "id": "prep01",
+      "name": "Start Pipeline",
+      "type": "n8n-nodes-base.code",
+      "position": [840, 300],
+      "parameters": {
+        "jsCode": "// Update status: starting text extraction\nconst STATUS_URL = 'https://n8n.simeontsvetanovn8nworkflows.site/webhook/internal/update-status';\nconst jobId = $('Init Job').first().json.jobId;\n\ntry {\n  if (typeof fetch === 'function') {\n    await fetch(STATUS_URL, {\n      method: 'POST',\n      headers: { 'Content-Type': 'application/json' },\n      body: JSON.stringify({\n        jobId,\n        status: 'processing',\n        phase: 'extracting_requirements',\n        progress: 5,\n        message: 'Извличане на текст от документите...'\n      })\n    });\n  }\n} catch(e) { /* Status update is non-critical */ }\n\n// Pass binary files to Extract Text sub-workflow\nreturn [{\n  json: {},\n  binary: $('Init Job').first().binary\n}];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "exec01",
+      "name": "Extract Text",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "position": [1120, 300],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "PASTE_01_EXTRACT_TEXT_ID",
+          "mode": "id"
+        }
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "prep02",
+      "name": "After Extract",
+      "type": "n8n-nodes-base.code",
+      "position": [1400, 300],
+      "parameters": {
+        "jsCode": "// Update status: extracting requirements\nconst STATUS_URL = 'https://n8n.simeontsvetanovn8nworkflows.site/webhook/internal/update-status';\nconst jobId = $('Init Job').first().json.jobId;\n\ntry {\n  if (typeof fetch === 'function') {\n    await fetch(STATUS_URL, {\n      method: 'POST',\n      headers: { 'Content-Type': 'application/json' },\n      body: JSON.stringify({\n        jobId,\n        status: 'processing',\n        phase: 'extracting_requirements',\n        progress: 15,\n        message: 'Анализиране на изискванията от документацията...'\n      })\n    });\n  }\n} catch(e) {}\n\n// Pass extracted text to Requirements sub-workflow\nconst extractResult = $('Extract Text').first().json;\nreturn [{\n  json: {\n    fullText: extractResult.fullText || ''\n  }\n}];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "exec02",
+      "name": "Extract Requirements",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "position": [1680, 300],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "PASTE_02_EXTRACT_REQUIREMENTS_ID",
+          "mode": "id"
+        }
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "prep03",
+      "name": "After Requirements",
+      "type": "n8n-nodes-base.code",
+      "position": [1960, 300],
+      "parameters": {
+        "jsCode": "// Update status: analyzing specification\nconst STATUS_URL = 'https://n8n.simeontsvetanovn8nworkflows.site/webhook/internal/update-status';\nconst jobId = $('Init Job').first().json.jobId;\n\ntry {\n  if (typeof fetch === 'function') {\n    await fetch(STATUS_URL, {\n      method: 'POST',\n      headers: { 'Content-Type': 'application/json' },\n      body: JSON.stringify({\n        jobId,\n        status: 'processing',\n        phase: 'analyzing_spec',\n        progress: 25,\n        message: 'Анализ на техническата спецификация...'\n      })\n    });\n  }\n} catch(e) {}\n\n// Pass full text for spec analysis\nconst extractResult = $('Extract Text').first().json;\nreturn [{\n  json: {\n    fullText: extractResult.fullText || ''\n  }\n}];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "exec03",
+      "name": "Analyze Spec",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "position": [2240, 300],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "PASTE_03_ANALYZE_SPEC_ID",
+          "mode": "id"
+        }
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "prep04",
+      "name": "After Spec Analysis",
+      "type": "n8n-nodes-base.code",
+      "position": [2520, 300],
+      "parameters": {
+        "jsCode": "// Update status: planning document\nconst STATUS_URL = 'https://n8n.simeontsvetanovn8nworkflows.site/webhook/internal/update-status';\nconst jobId = $('Init Job').first().json.jobId;\n\ntry {\n  if (typeof fetch === 'function') {\n    await fetch(STATUS_URL, {\n      method: 'POST',\n      headers: { 'Content-Type': 'application/json' },\n      body: JSON.stringify({\n        jobId,\n        status: 'processing',\n        phase: 'planning',\n        progress: 35,\n        message: 'Планиране на структурата на документа...'\n      })\n    });\n  }\n} catch(e) {}\n\n// Combine data for document planning\nconst requirements = $('Extract Requirements').first().json.requirements || {};\nconst specData = $('Analyze Spec').first().json.specData || {};\nconst contractorInfo = $('Init Job').first().json.contractorInfo || {};\n\nreturn [{\n  json: {\n    requirements,\n    specData,\n    contractorInfo\n  }\n}];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "exec04",
+      "name": "Plan Document",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "position": [2800, 300],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "PASTE_04_PLAN_DOCUMENT_ID",
+          "mode": "id"
+        }
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "prep05",
+      "name": "After Plan",
+      "type": "n8n-nodes-base.code",
+      "position": [3080, 300],
+      "parameters": {
+        "jsCode": "// Update status: writing document\nconst STATUS_URL = 'https://n8n.simeontsvetanovn8nworkflows.site/webhook/internal/update-status';\nconst jobId = $('Init Job').first().json.jobId;\n\ntry {\n  if (typeof fetch === 'function') {\n    await fetch(STATUS_URL, {\n      method: 'POST',\n      headers: { 'Content-Type': 'application/json' },\n      body: JSON.stringify({\n        jobId,\n        status: 'processing',\n        phase: 'writing',\n        progress: 45,\n        message: 'Писане на техническото предложение...'\n      })\n    });\n  }\n} catch(e) {}\n\n// Combine ALL accumulated data for writing\nconst requirements = $('Extract Requirements').first().json.requirements || {};\nconst specData = $('Analyze Spec').first().json.specData || {};\nconst contractorInfo = $('Init Job').first().json.contractorInfo || {};\nconst documentPlan = $('Plan Document').first().json.documentPlan || {};\n\nreturn [{\n  json: {\n    requirements,\n    specData,\n    contractorInfo,\n    documentPlan\n  }\n}];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "exec05",
+      "name": "Write Document",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "position": [3360, 300],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "PASTE_05_WRITE_DOCUMENT_ID",
+          "mode": "id"
+        }
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "prep06",
+      "name": "After Write",
+      "type": "n8n-nodes-base.code",
+      "position": [3640, 300],
+      "parameters": {
+        "jsCode": "// Update status: validating\nconst STATUS_URL = 'https://n8n.simeontsvetanovn8nworkflows.site/webhook/internal/update-status';\nconst jobId = $('Init Job').first().json.jobId;\n\ntry {\n  if (typeof fetch === 'function') {\n    await fetch(STATUS_URL, {\n      method: 'POST',\n      headers: { 'Content-Type': 'application/json' },\n      body: JSON.stringify({\n        jobId,\n        status: 'processing',\n        phase: 'validating',\n        progress: 65,\n        message: 'Проверка на документа за пълнота и релевантност...'\n      })\n    });\n  }\n} catch(e) {}\n\n// Pass draft + requirements + specData for validation\nconst draftText = $('Write Document').first().json.draftText || '';\nconst requirements = $('Extract Requirements').first().json.requirements || {};\nconst specData = $('Analyze Spec').first().json.specData || {};\n\nreturn [{\n  json: {\n    draftText,\n    requirements,\n    specData\n  }\n}];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "exec06",
+      "name": "Validate Document",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "position": [3920, 300],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "PASTE_06_VALIDATE_DOCUMENT_ID",
+          "mode": "id"
+        }
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "prep07",
+      "name": "After Validate",
+      "type": "n8n-nodes-base.code",
+      "position": [4200, 300],
+      "parameters": {
+        "jsCode": "// Update status: finalizing\nconst STATUS_URL = 'https://n8n.simeontsvetanovn8nworkflows.site/webhook/internal/update-status';\nconst jobId = $('Init Job').first().json.jobId;\n\ntry {\n  if (typeof fetch === 'function') {\n    await fetch(STATUS_URL, {\n      method: 'POST',\n      headers: { 'Content-Type': 'application/json' },\n      body: JSON.stringify({\n        jobId,\n        status: 'processing',\n        phase: 'finalizing',\n        progress: 85,\n        message: 'Финална редакция на документа...'\n      })\n    });\n  }\n} catch(e) {}\n\n// Pass draft text + validation feedback for finalization\nconst draftText = $('Write Document').first().json.draftText || '';\nconst validation = $('Validate Document').first().json;\nconst validationFeedback = validation.validationPassed\n  ? ''\n  : (validation.rewriteInstructions || '');\n\nreturn [{\n  json: {\n    draftText,\n    validationFeedback\n  }\n}];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "exec07",
+      "name": "Finalize Document",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "position": [4480, 300],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "PASTE_07_FINALIZE_DOCUMENT_ID",
+          "mode": "id"
+        }
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "complete",
+      "name": "Pipeline Complete",
+      "type": "n8n-nodes-base.code",
+      "position": [4760, 300],
+      "parameters": {
+        "jsCode": "// Final status update: completed\nconst STATUS_URL = 'https://n8n.simeontsvetanovn8nworkflows.site/webhook/internal/update-status';\nconst jobId = $('Init Job').first().json.jobId;\n\nconst finalResult = $('Finalize Document').first().json;\nconst validation = $('Validate Document').first().json;\nconst writeStats = $('Write Document').first().json.stats || {};\n\nconst result = {\n  finalText: finalResult.finalText || '',\n  stats: finalResult.stats || {},\n  validation: {\n    coverageScore: validation.coverageScore || 0,\n    relevanceScore: validation.relevanceScore || 0,\n    passed: validation.validationPassed || false\n  },\n  pages: finalResult.stats?.estimatedPages || writeStats.estimatedPages || 0,\n  sections: 0,\n  placeholders: finalResult.stats?.placeholderCount || 0,\n  wordCount: finalResult.stats?.wordCount || 0\n};\n\ntry {\n  if (typeof fetch === 'function') {\n    await fetch(STATUS_URL, {\n      method: 'POST',\n      headers: { 'Content-Type': 'application/json' },\n      body: JSON.stringify({\n        jobId,\n        status: 'completed',\n        phase: 'exporting',\n        progress: 100,\n        message: 'Техническото предложение е готово!',\n        result\n      })\n    });\n  }\n} catch(e) {\n  // If status update fails, log but don't crash\n}\n\nreturn [{ json: { jobId, status: 'completed', result } }];"
+      },
+      "typeVersion": 2
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [[{ "node": "Init Job", "type": "main", "index": 0 }]] },
+    "Init Job": { "main": [[{ "node": "Send Response", "type": "main", "index": 0 }]] },
+    "Send Response": { "main": [[{ "node": "Start Pipeline", "type": "main", "index": 0 }]] },
+    "Start Pipeline": { "main": [[{ "node": "Extract Text", "type": "main", "index": 0 }]] },
+    "Extract Text": { "main": [[{ "node": "After Extract", "type": "main", "index": 0 }]] },
+    "After Extract": { "main": [[{ "node": "Extract Requirements", "type": "main", "index": 0 }]] },
+    "Extract Requirements": { "main": [[{ "node": "After Requirements", "type": "main", "index": 0 }]] },
+    "After Requirements": { "main": [[{ "node": "Analyze Spec", "type": "main", "index": 0 }]] },
+    "Analyze Spec": { "main": [[{ "node": "After Spec Analysis", "type": "main", "index": 0 }]] },
+    "After Spec Analysis": { "main": [[{ "node": "Plan Document", "type": "main", "index": 0 }]] },
+    "Plan Document": { "main": [[{ "node": "After Plan", "type": "main", "index": 0 }]] },
+    "After Plan": { "main": [[{ "node": "Write Document", "type": "main", "index": 0 }]] },
+    "Write Document": { "main": [[{ "node": "After Write", "type": "main", "index": 0 }]] },
+    "After Write": { "main": [[{ "node": "Validate Document", "type": "main", "index": 0 }]] },
+    "Validate Document": { "main": [[{ "node": "After Validate", "type": "main", "index": 0 }]] },
+    "After Validate": { "main": [[{ "node": "Finalize Document", "type": "main", "index": 0 }]] },
+    "Finalize Document": { "main": [[{ "node": "Pipeline Complete", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

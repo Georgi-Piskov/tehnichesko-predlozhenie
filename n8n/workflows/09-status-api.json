@@ -1,0 +1,165 @@
+{
+  "name": "TP - Status API",
+  "nodes": [
+    {
+      "id": "update-wh",
+      "name": "Update Status Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "position": [0, 100],
+      "webhookId": "a1b2c3d4-update",
+      "parameters": {
+        "path": "internal/update-status",
+        "httpMethod": "POST",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "store-status",
+      "name": "Store Status",
+      "type": "n8n-nodes-base.code",
+      "position": [260, 100],
+      "parameters": {
+        "jsCode": "const body = $json.body || $json;\nconst jobId = body.jobId;\nif (!jobId) return [];\n\nconst sd = $getWorkflowStaticData('global');\nif (!sd.jobs) sd.jobs = {};\n\n// If result is included, store it\nif (body.result) {\n  sd.jobs[jobId] = {\n    ...sd.jobs[jobId],\n    ...body,\n    completedAt: new Date().toISOString()\n  };\n} else {\n  sd.jobs[jobId] = {\n    ...(sd.jobs[jobId] || {}),\n    status: body.status || 'processing',\n    phase: body.phase || 'init',\n    progress: body.progress || 0,\n    message: body.message || '',\n    updatedAt: new Date().toISOString()\n  };\n}\n\nreturn [{ json: { ok: true } }];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "status-wh",
+      "name": "Job Status Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "position": [0, 360],
+      "webhookId": "a1b2c3d4-status",
+      "parameters": {
+        "path": "job-status",
+        "httpMethod": "GET",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "read-status",
+      "name": "Read Status",
+      "type": "n8n-nodes-base.code",
+      "position": [260, 360],
+      "parameters": {
+        "jsCode": "const jobId = $json.query?.jobId || '';\nif (!jobId) return [{ json: { status: 'error', message: 'Липсва jobId' } }];\n\nconst sd = $getWorkflowStaticData('global');\nconst job = sd.jobs?.[jobId];\n\nif (!job) {\n  return [{ json: { status: 'not_found', phase: 'unknown', progress: 0, message: 'Заявка не е намерена' } }];\n}\n\nconst resp = {\n  status: job.status || 'processing',\n  phase: job.phase || 'init',\n  progress: job.progress || 0,\n  message: job.message || 'Обработка...'\n};\n\nif (job.status === 'completed' && job.result) {\n  resp.result = { stats: job.result.stats, hasDocument: true };\n}\n\nreturn [{ json: resp }];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "respond-status",
+      "name": "Respond Status",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [520, 360],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              { "name": "Access-Control-Allow-Origin", "value": "*" }
+            ]
+          }
+        }
+      },
+      "typeVersion": 1.1
+    },
+    {
+      "id": "preview-wh",
+      "name": "Preview Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "position": [0, 600],
+      "webhookId": "a1b2c3d4-preview",
+      "parameters": {
+        "path": "preview",
+        "httpMethod": "GET",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "build-preview",
+      "name": "Build Preview",
+      "type": "n8n-nodes-base.code",
+      "position": [260, 600],
+      "parameters": {
+        "jsCode": "const jobId = $json.query?.jobId || '';\nif (!jobId) return [{ json: { error: true, message: 'Липсва jobId' } }];\n\nconst sd = $getWorkflowStaticData('global');\nconst job = sd.jobs?.[jobId];\n\nif (!job?.result?.text) {\n  return [{ json: { error: true, message: 'Документът не е готов' } }];\n}\n\nlet html = job.result.text\n  .replace(/^### (.*$)/gm, '<h3>$1</h3>')\n  .replace(/^## (.*$)/gm, '<h2>$1</h2>')\n  .replace(/^# (.*$)/gm, '<h1>$1</h1>')\n  .replace(/\\*\\*(.*?)\\*\\*/g, '<strong>$1</strong>')\n  .replace(/^- (.*$)/gm, '<li>$1</li>')\n  .replace(/\\n\\n/g, '</p><p>')\n  .replace(/\\[⚠️ ПОПЪЛНЕТЕ: (.*?)\\]/g, '<span class=\"placeholder\">[⚠️ ПОПЪЛНЕТЕ: $1]</span>');\n\nreturn [{ json: { html: '<div class=\"preview\">' + html + '</div>', stats: job.result.stats } }];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "respond-preview",
+      "name": "Respond Preview",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [520, 600],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              { "name": "Access-Control-Allow-Origin", "value": "*" }
+            ]
+          }
+        }
+      },
+      "typeVersion": 1.1
+    },
+    {
+      "id": "download-wh",
+      "name": "Download Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "position": [0, 860],
+      "webhookId": "a1b2c3d4-download",
+      "parameters": {
+        "path": "download",
+        "httpMethod": "GET",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "build-download",
+      "name": "Build Download",
+      "type": "n8n-nodes-base.code",
+      "position": [260, 860],
+      "parameters": {
+        "jsCode": "const jobId = $json.query?.jobId || '';\nif (!jobId) return [{ json: { error: true, message: 'Липсва jobId' } }];\n\nconst sd = $getWorkflowStaticData('global');\nconst job = sd.jobs?.[jobId];\n\nif (!job?.result?.text) {\n  return [{ json: { error: true, message: 'Документът не е готов' } }];\n}\n\nconst text = job.result.text;\nconst fileName = 'Tehnichesko_Predlozhenie_' + jobId + '.md';\nconst buf = Buffer.from(text, 'utf-8');\n\nreturn [{\n  json: { fileName },\n  binary: {\n    data: {\n      data: buf.toString('base64'),\n      mimeType: 'text/markdown; charset=utf-8',\n      fileName: fileName\n    }\n  }\n}];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "respond-download",
+      "name": "Respond Download",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [520, 860],
+      "parameters": {
+        "respondWith": "binary",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              { "name": "Access-Control-Allow-Origin", "value": "*" },
+              { "name": "Content-Disposition", "value": "=attachment; filename=\"{{ $json.fileName }}\"" }
+            ]
+          }
+        }
+      },
+      "typeVersion": 1.1
+    }
+  ],
+  "connections": {
+    "Update Status Webhook": { "main": [[{ "node": "Store Status", "type": "main", "index": 0 }]] },
+    "Job Status Webhook": { "main": [[{ "node": "Read Status", "type": "main", "index": 0 }]] },
+    "Read Status": { "main": [[{ "node": "Respond Status", "type": "main", "index": 0 }]] },
+    "Preview Webhook": { "main": [[{ "node": "Build Preview", "type": "main", "index": 0 }]] },
+    "Build Preview": { "main": [[{ "node": "Respond Preview", "type": "main", "index": 0 }]] },
+    "Download Webhook": { "main": [[{ "node": "Build Download", "type": "main", "index": 0 }]] },
+    "Build Download": { "main": [[{ "node": "Respond Download", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

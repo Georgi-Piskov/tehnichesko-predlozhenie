@@ -1,0 +1,50 @@
+{
+  "name": "TP - Step 1: Extract Text",
+  "nodes": [
+    {
+      "id": "trigger",
+      "name": "Start",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "position": [0, 300],
+      "parameters": {},
+      "typeVersion": 1
+    },
+    {
+      "id": "split-files",
+      "name": "Split Binary Files",
+      "type": "n8n-nodes-base.code",
+      "position": [260, 300],
+      "parameters": {
+        "jsCode": "const inputItem = $input.first();\nconst binaryData = inputItem.binary || {};\nconst results = [];\n\nfor (const [fieldName, fileData] of Object.entries(binaryData)) {\n  results.push({\n    json: { sourceField: fieldName, fileName: fileData.fileName },\n    binary: { data: fileData }\n  });\n}\n\nif (results.length === 0) {\n  throw new Error('Не са намерени файлове за обработка');\n}\n\nreturn results;"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "extract-pdf",
+      "name": "Extract from PDF",
+      "type": "n8n-nodes-base.extractFromFile",
+      "position": [520, 300],
+      "parameters": {
+        "operation": "pdf",
+        "options": {}
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "merge-texts",
+      "name": "Merge Texts",
+      "type": "n8n-nodes-base.code",
+      "position": [780, 300],
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst texts = [];\n\nfor (const item of items) {\n  const text = item.json.text || item.json.data || '';\n  if (text) texts.push(text);\n}\n\nconst fullText = texts.join('\\n\\n--- КРАЙ НА ДОКУМЕНТ ---\\n\\n');\n\nreturn [{\n  json: {\n    fullText: fullText,\n    documentCount: items.length,\n    totalCharacters: fullText.length\n  }\n}];"
+      },
+      "typeVersion": 2
+    }
+  ],
+  "connections": {
+    "Start": { "main": [[{ "node": "Split Binary Files", "type": "main", "index": 0 }]] },
+    "Split Binary Files": { "main": [[{ "node": "Extract from PDF", "type": "main", "index": 0 }]] },
+    "Extract from PDF": { "main": [[{ "node": "Merge Texts", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

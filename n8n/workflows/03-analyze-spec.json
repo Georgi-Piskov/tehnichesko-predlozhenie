@@ -1,0 +1,63 @@
+{
+  "name": "TP - Step 3: Analyze Specification",
+  "nodes": [
+    {
+      "id": "trigger",
+      "name": "Start",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "position": [0, 300],
+      "parameters": {},
+      "typeVersion": 1
+    },
+    {
+      "id": "llm",
+      "name": "Analyze Spec",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "position": [300, 300],
+      "parameters": {
+        "text": "=Ти си експерт-технически анализатор за обществени поръчки в България.\n\nЗадача: Извлечи ВСИЧКИ конкретни технически данни от документацията.\n\nИзвлечи:\n1. Описание на обекта — какво се строи/доставя/проектира, местоположение\n2. Обхват на работите — дейности, фази, резултати\n3. Технически параметри — материали, стандарти, размери, количества\n4. Изисквания за персонал — специалисти, квалификации\n5. Оборудване — машини, инструменти\n6. Нормативна рамка — закони, наредби, БДС стандарти\n7. Срокове, гаранции, ЗБУТ, екология, ограничения\n\nВърни САМО валиден JSON:\n{\n  \"object\": {\"type\": \"\", \"name\": \"\", \"description\": \"\", \"location\": \"\"},\n  \"scope_of_work\": [{\"phase\": \"\", \"activities\": [], \"deliverables\": []}],\n  \"technical_parameters\": [{\"category\": \"\", \"parameter\": \"\", \"value\": \"\", \"standard\": \"\"}],\n  \"personnel_requirements\": [{\"role\": \"\", \"qualifications\": \"\"}],\n  \"equipment_requirements\": [{\"type\": \"\", \"specs\": \"\"}],\n  \"regulatory_framework\": [],\n  \"timeline\": {\"total_duration\": \"\", \"phases\": []},\n  \"warranty_periods\": [{\"type\": \"\", \"period\": \"\"}],\n  \"safety_requirements\": [],\n  \"environmental_requirements\": [],\n  \"key_quantities\": [{\"item\": \"\", \"quantity\": \"\", \"unit\": \"\"}]\n}\n\nПравила:\n- САМО факти от документа — не интерпретирай\n- Бъди конкретен: \"бетон C25/30\" а не \"качествен бетон\"\n- Отбележи липсващи данни с null\n- САМО JSON, без друг текст\n\nДОКУМЕНТАЦИЯ:\n{{ $json.fullText.substring(0, 80000) }}",
+        "promptType": "define",
+        "messages": {
+          "messageValues": [
+            {
+              "type": "system",
+              "message": "You are an expert technical analyst for Bulgarian public procurement. Extract ONLY concrete verifiable facts. Output ONLY valid JSON, no markdown, no explanations. Language: Bulgarian."
+            }
+          ]
+        }
+      },
+      "typeVersion": 1.4
+    },
+    {
+      "id": "model",
+      "name": "Claude Sonnet",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "position": [220, 520],
+      "parameters": {
+        "model": "anthropic/claude-sonnet-4-20250514",
+        "options": {
+          "baseURL": "https://openrouter.ai/api/v1",
+          "maxTokens": 16000,
+          "temperature": 0.1
+        }
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "parse",
+      "name": "Parse Spec Data",
+      "type": "n8n-nodes-base.code",
+      "position": [600, 300],
+      "parameters": {
+        "jsCode": "const raw = ($json.text || $json.response || '').trim();\nlet result;\n\ntry {\n  result = JSON.parse(raw);\n} catch (e) {\n  const m = raw.match(/```(?:json)?\\s*([\\s\\S]*?)```/);\n  const candidate = m ? m[1].trim() : raw;\n  try {\n    const s = candidate.indexOf('{');\n    const e2 = candidate.lastIndexOf('}');\n    let jsonStr = candidate.substring(s, e2 + 1);\n    jsonStr = jsonStr.replace(/,\\s*([\\]\\}])/g, '$1');\n    result = JSON.parse(jsonStr);\n  } catch (e3) {\n    result = { object: { name: 'Parse error' }, _raw: raw.substring(0, 2000) };\n  }\n}\n\nreturn [{ json: { specData: result } }];"
+      },
+      "typeVersion": 2
+    }
+  ],
+  "connections": {
+    "Start": { "main": [[{ "node": "Analyze Spec", "type": "main", "index": 0 }]] },
+    "Claude Sonnet": { "ai_languageModel": [[{ "node": "Analyze Spec", "type": "ai_languageModel", "index": 0 }]] },
+    "Analyze Spec": { "main": [[{ "node": "Parse Spec Data", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}
