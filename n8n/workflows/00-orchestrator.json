@@ -42,7 +42,7 @@
       "type": "n8n-nodes-base.code",
       "position": [780, 200],
       "parameters": {
-        "jsCode": "try {\n  await fetch('https://n8n.simeontsvetanovn8nworkflows.site/webhook/internal/update-status', {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({ jobId: $json.jobId, status: 'processing', phase: 'extracting', progress: 5, message: 'Извличане на текст от документите...' })\n  });\n} catch (e) {}\nreturn [{ json: $json, binary: $binary }];"
+        "jsCode": "return [{ json: $json, binary: $binary }];"
       },
       "typeVersion": 2
     },
@@ -52,7 +52,7 @@
       "type": "n8n-nodes-base.code",
       "position": [1040, 200],
       "parameters": {
-        "jsCode": "var b = $binary || {};\nvar items = [];\nfor (var k of Object.keys(b)) {\n  items.push({ json: { sourceField: k, fileName: b[k].fileName || k }, binary: { data: b[k] } });\n}\nif (items.length === 0) throw new Error('No files uploaded');\nreturn items;"
+        "jsCode": "var b = $binary || {};\nvar items = [];\nfor (var k of Object.keys(b)) {\n  items.push({ json: { sourceField: k, fileName: b[k].fileName || k, jobId: $json.jobId }, binary: { data: b[k] } });\n}\nif (items.length === 0) throw new Error('No files uploaded');\nreturn items;"
       },
       "typeVersion": 2
     },
@@ -83,7 +83,7 @@
       "type": "n8n-nodes-base.code",
       "position": [260, 450],
       "parameters": {
-        "jsCode": "try {\n  await fetch('https://n8n.simeontsvetanovn8nworkflows.site/webhook/internal/update-status', {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({ jobId: $('Init Job').first().json.jobId, status: 'processing', phase: 'requirements', progress: 15, message: 'Извличане на изисквания...' })\n  });\n} catch (e) {}\nreturn [{ json: $json }];"
+        "jsCode": "return [{ json: $json }];"
       },
       "typeVersion": 2
     },
@@ -108,7 +108,7 @@
       "type": "n8n-nodes-base.code",
       "position": [780, 450],
       "parameters": {
-        "jsCode": "try {\n  await fetch('https://n8n.simeontsvetanovn8nworkflows.site/webhook/internal/update-status', {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({ jobId: $('Init Job').first().json.jobId, status: 'processing', phase: 'analysis', progress: 30, message: 'Анализ на спецификация...' })\n  });\n} catch (e) {}\nvar mt = $('Merge Texts').first().json;\nreturn [{ json: { documentationText: mt.documentationText || '', specificationText: mt.specificationText || '', fullText: mt.fullText || '' } }];"
+        "jsCode": "var mt = $('Merge Texts').first().json;\nreturn [{ json: { documentationText: mt.documentationText || '', specificationText: mt.specificationText || '', fullText: mt.fullText || '' } }];"
       },
       "typeVersion": 2
     },
@@ -133,7 +133,7 @@
       "type": "n8n-nodes-base.code",
       "position": [1300, 450],
       "parameters": {
-        "jsCode": "try {\n  await fetch('https://n8n.simeontsvetanovn8nworkflows.site/webhook/internal/update-status', {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({ jobId: $('Init Job').first().json.jobId, status: 'processing', phase: 'planning', progress: 45, message: 'Планиране на документа...' })\n  });\n} catch (e) {}\nreturn [{ json: {\n  requirements: $('Extract Requirements').first().json.requirements || $('Extract Requirements').first().json,\n  specData: $json.specData || $json,\n  contractorInfo: $('Init Job').first().json.contractorInfo\n} }];"
+        "jsCode": "return [{ json: {\n  requirements: $('Extract Requirements').first().json.requirements || $('Extract Requirements').first().json,\n  specData: $json.specData || $json,\n  contractorInfo: $('Init Job').first().json.contractorInfo\n} }];"
       },
       "typeVersion": 2
     },
@@ -153,12 +153,93 @@
       "typeVersion": 4.2
     },
     {
-      "id": "section-loop",
-      "name": "Section Loop",
+      "id": "flatten-chunks",
+      "name": "Flatten Chunks",
       "type": "n8n-nodes-base.code",
       "position": [260, 700],
       "parameters": {
-        "jsCode": "var BASE = 'https://n8n.simeontsvetanovn8nworkflows.site/webhook';\nvar STATUS_URL = BASE + '/internal/update-status';\nvar jobId = $('Init Job').first().json.jobId;\nvar plan = $json.documentPlan;\nvar reqs = $('Extract Requirements').first().json.requirements || $('Extract Requirements').first().json;\nvar spec = $('Analyze Spec').first().json.specData || $('Analyze Spec').first().json;\nvar ci = $('Init Job').first().json.contractorInfo || {};\nvar pt = (reqs && reqs.procurement_type) || 'unknown';\n\nvar sections = (plan && plan.sections) || [];\nif (sections.length === 0) throw new Error('Plan has no sections');\n\n// Flatten: iterate over SUBSECTIONS, not sections\n// Each subsection = one write call (~3-5 pages)\nvar chunks = [];\nfor (var s = 0; s < sections.length; s++) {\n  var sec = sections[s];\n  var subs = sec.subsections || [];\n  if (subs.length === 0) {\n    chunks.push({\n      id: sec.id, title: sec.title, parentId: null, parentTitle: null,\n      estimated_pages: sec.estimated_pages || 5,\n      content_guidance: sec.content_guidance || [],\n      spec_data_to_use: sec.spec_data_to_use || [],\n      tables_needed: sec.tables_needed || [],\n      requirement_id: sec.requirement_id\n    });\n  } else {\n    for (var j = 0; j < subs.length; j++) {\n      chunks.push({\n        id: subs[j].id, title: subs[j].title,\n        parentId: sec.id, parentTitle: sec.title,\n        estimated_pages: subs[j].estimated_pages || 4,\n        content_guidance: subs[j].content_guidance || [],\n        spec_data_to_use: subs[j].spec_data_to_use || [],\n        tables_needed: subs[j].tables_needed || [],\n        requirement_id: subs[j].requirement_id || sec.requirement_id\n      });\n    }\n  }\n}\n\nvar fullDoc = '# ' + (plan.document_title || 'ТЕХНИЧЕСКО ПРЕДЛОЖЕНИЕ') + '\\n\\n';\nvar results = [];\nvar lastParent = '';\n\nfor (var i = 0; i < chunks.length; i++) {\n  var chunk = chunks[i];\n  var prog = 55 + Math.round((i / chunks.length) * 30);\n\n  // Add parent section heading when entering new top-level section\n  if (chunk.parentTitle && chunk.parentTitle !== lastParent) {\n    fullDoc += '## ' + chunk.parentId + '. ' + chunk.parentTitle + '\\n\\n';\n    lastParent = chunk.parentTitle;\n  }\n\n  try {\n    await fetch(STATUS_URL, {\n      method: 'POST', headers: { 'Content-Type': 'application/json' },\n      body: JSON.stringify({ jobId: jobId, status: 'processing', phase: 'writing', progress: prog, message: 'Подсекция ' + (i+1) + '/' + chunks.length + ': ' + chunk.title })\n    });\n  } catch(e) {}\n\n  var prevCtx = fullDoc.length > 2000 ? fullDoc.substring(fullDoc.length - 2000) : fullDoc;\n  var secText = '';\n  var attempts = 0;\n  var feedback = '';\n\n  while (attempts < 2) {\n    try {\n      var wr = await fetch(BASE + '/tp-write-section', {\n        method: 'POST',\n        headers: { 'Content-Type': 'application/json' },\n        body: JSON.stringify({\n          section: chunk, requirements: reqs, specData: spec,\n          contractorInfo: ci, previousContext: prevCtx,\n          feedback: feedback, procurementType: pt,\n          sectionIndex: i, totalSections: chunks.length\n        })\n      });\n      if (!wr.ok) throw new Error('Write HTTP ' + wr.status);\n      var wRes = await wr.json();\n      secText = wRes.sectionText || wRes.text || '';\n\n      var vr = await fetch(BASE + '/tp-validate-section', {\n        method: 'POST',\n        headers: { 'Content-Type': 'application/json' },\n        body: JSON.stringify({\n          sectionText: secText, section: chunk,\n          requirements: reqs, procurementType: pt\n        })\n      });\n      if (!vr.ok) break;\n      var vRes = await vr.json();\n      if (vRes.passed) break;\n      feedback = vRes.feedback || 'Improve section.';\n      attempts++;\n    } catch (err) {\n      secText = '### ' + chunk.id + '. ' + chunk.title + '\\n\\n[ERROR: ' + err.message + ']\\n';\n      break;\n    }\n  }\n\n  fullDoc += secText + '\\n\\n';\n  results.push({ id: chunk.id, title: chunk.title, wordCount: secText.trim().split(/\\s+/).length, attempts: attempts + 1 });\n}\n\nvar totalWC = fullDoc.trim().split(/\\s+/).length;\ntry {\n  await fetch(STATUS_URL, {\n    method: 'POST', headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({ jobId: jobId, status: 'processing', phase: 'finalizing', progress: 88, message: 'Финализиране...' })\n  });\n} catch(e) {}\n\nreturn [{ json: { fullDocument: fullDoc, sectionResults: results, totalWordCount: totalWC, estimatedPages: Math.round(totalWC / 375) } }];"
+        "jsCode": "var plan = $json.documentPlan;\nvar reqs = $('Extract Requirements').first().json.requirements || $('Extract Requirements').first().json;\nvar spec = $('Analyze Spec').first().json.specData || $('Analyze Spec').first().json;\nvar ci = $('Init Job').first().json.contractorInfo || {};\nvar pt = (reqs && reqs.procurement_type) || 'unknown';\nvar sections = (plan && plan.sections) || [];\nif (sections.length === 0) throw new Error('Plan has no sections');\n\nvar sd = $getWorkflowStaticData('global');\nsd.fullDoc = '# ' + (plan.document_title || 'ТЕХНИЧЕСКО ПРЕДЛОЖЕНИЕ') + '\\n\\n';\nsd.lastParent = '';\nsd.results = [];\n\nvar chunks = [];\nfor (var s = 0; s < sections.length; s++) {\n  var sec = sections[s];\n  var subs = sec.subsections || [];\n  if (subs.length === 0) {\n    chunks.push({\n      id: sec.id, title: sec.title, parentId: null, parentTitle: null,\n      estimated_pages: sec.estimated_pages || 5,\n      content_guidance: sec.content_guidance || [],\n      spec_data_to_use: sec.spec_data_to_use || [],\n      tables_needed: sec.tables_needed || [],\n      requirement_id: sec.requirement_id\n    });\n  } else {\n    for (var j = 0; j < subs.length; j++) {\n      var sub = subs[j];\n      chunks.push({\n        id: sub.id, title: sub.title,\n        parentId: sec.id, parentTitle: sec.title,\n        estimated_pages: sub.estimated_pages || 4,\n        content_guidance: sub.content_guidance || [],\n        spec_data_to_use: sub.spec_data_to_use || [],\n        tables_needed: sub.tables_needed || [],\n        requirement_id: sub.requirement_id || sec.requirement_id\n      });\n    }\n  }\n}\n\nvar items = [];\nfor (var i = 0; i < chunks.length; i++) {\n  items.push({\n    json: {\n      chunk: chunks[i],\n      chunkIndex: i,\n      totalChunks: chunks.length,\n      requirements: reqs,\n      specData: spec,\n      contractorInfo: ci,\n      procurementType: pt\n    }\n  });\n}\nreturn items;"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "loop-over-items",
+      "name": "Loop Over Items",
+      "type": "n8n-nodes-base.splitInBatches",
+      "position": [520, 700],
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "typeVersion": 3
+    },
+    {
+      "id": "prep-write",
+      "name": "Prep Write",
+      "type": "n8n-nodes-base.code",
+      "position": [720, 920],
+      "parameters": {
+        "jsCode": "var sd = $getWorkflowStaticData('global');\nvar prevCtx = sd.fullDoc || '';\nif (prevCtx.length > 2000) prevCtx = prevCtx.substring(prevCtx.length - 2000);\n\nreturn [{ json: {\n  section: $json.chunk,\n  requirements: $json.requirements,\n  specData: $json.specData,\n  contractorInfo: $json.contractorInfo,\n  previousContext: prevCtx,\n  feedback: '',\n  procurementType: $json.procurementType,\n  sectionIndex: $json.chunkIndex,\n  totalSections: $json.totalChunks\n} }];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "write-section",
+      "name": "Write Section",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [980, 920],
+      "parameters": {
+        "method": "POST",
+        "url": "https://n8n.simeontsvetanovn8nworkflows.site/webhook/tp-write-section",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": { "timeout": 180000 }
+      },
+      "typeVersion": 4.2
+    },
+    {
+      "id": "prep-validate",
+      "name": "Prep Validate",
+      "type": "n8n-nodes-base.code",
+      "position": [1240, 920],
+      "parameters": {
+        "jsCode": "var pw = $('Prep Write').first().json;\nreturn [{ json: {\n  sectionText: $json.sectionText || $json.text || '',\n  section: pw.section,\n  requirements: pw.requirements,\n  procurementType: pw.procurementType\n} }];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "validate-section",
+      "name": "Validate Section",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1500, 920],
+      "parameters": {
+        "method": "POST",
+        "url": "https://n8n.simeontsvetanovn8nworkflows.site/webhook/tp-validate-section",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": { "timeout": 120000 }
+      },
+      "typeVersion": 4.2
+    },
+    {
+      "id": "accumulate-section",
+      "name": "Accumulate Section",
+      "type": "n8n-nodes-base.code",
+      "position": [1760, 920],
+      "parameters": {
+        "jsCode": "var sd = $getWorkflowStaticData('global');\nvar pw = $('Prep Write').first().json;\nvar writeRes = $('Write Section').first().json;\nvar valRes = $json;\n\nvar chunk = pw.section;\nvar secText = writeRes.sectionText || writeRes.text || '';\n\nif (chunk.parentTitle && chunk.parentTitle !== sd.lastParent) {\n  sd.fullDoc += '## ' + (chunk.parentId || '') + '. ' + chunk.parentTitle + '\\n\\n';\n  sd.lastParent = chunk.parentTitle;\n}\n\nsd.fullDoc += secText + '\\n\\n';\nsd.results.push({\n  id: chunk.id,\n  title: chunk.title,\n  wordCount: secText.trim().split(/\\s+/).length,\n  passed: valRes.passed || false,\n  score: valRes.score || 0\n});\n\nreturn [{ json: { ok: true } }];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "assemble-document",
+      "name": "Assemble Document",
+      "type": "n8n-nodes-base.code",
+      "position": [780, 700],
+      "parameters": {
+        "jsCode": "var sd = $getWorkflowStaticData('global');\nvar fullDoc = sd.fullDoc || '';\nvar results = sd.results || [];\nvar totalWC = fullDoc.trim().split(/\\s+/).length;\n\nsd.fullDoc = '';\nsd.lastParent = '';\nsd.results = [];\n\nreturn [{ json: {\n  fullDocument: fullDoc,\n  sectionResults: results,\n  totalWordCount: totalWC,\n  estimatedPages: Math.round(totalWC / 375)\n} }];"
       },
       "typeVersion": 2
     },
@@ -166,7 +247,7 @@
       "id": "prep-finalize",
       "name": "Prep Finalize",
       "type": "n8n-nodes-base.code",
-      "position": [520, 700],
+      "position": [1040, 700],
       "parameters": {
         "jsCode": "return [{ json: { draftText: $json.fullDocument || '' } }];"
       },
@@ -176,7 +257,7 @@
       "id": "finalize-document",
       "name": "Finalize Document",
       "type": "n8n-nodes-base.httpRequest",
-      "position": [780, 700],
+      "position": [1300, 700],
       "parameters": {
         "method": "POST",
         "url": "https://n8n.simeontsvetanovn8nworkflows.site/webhook/tp-step-07-finalize",
@@ -191,9 +272,9 @@
       "id": "pipeline-complete",
       "name": "Pipeline Complete",
       "type": "n8n-nodes-base.code",
-      "position": [1040, 700],
+      "position": [1560, 700],
       "parameters": {
-        "jsCode": "var jobId = $('Init Job').first().json.jobId;\nvar finalText = $json.finalText || $json.draftText || '';\nvar stats = $json.stats || {};\ntry {\n  await fetch('https://n8n.simeontsvetanovn8nworkflows.site/webhook/internal/update-status', {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({ jobId: jobId, status: 'completed', phase: 'done', progress: 100, message: 'Готово!', result: { text: finalText, stats: stats } })\n  });\n} catch (e) {}\nreturn [{ json: { success: true, jobId: jobId } }];"
+        "jsCode": "var finalText = $json.finalText || $json.draftText || '';\nreturn [{ json: { success: true, finalDocument: finalText } }];"
       },
       "typeVersion": 2
     }
@@ -211,8 +292,20 @@
     "After Requirements": { "main": [[{ "node": "Analyze Spec", "type": "main", "index": 0 }]] },
     "Analyze Spec": { "main": [[{ "node": "After Spec Analysis", "type": "main", "index": 0 }]] },
     "After Spec Analysis": { "main": [[{ "node": "Plan Document", "type": "main", "index": 0 }]] },
-    "Plan Document": { "main": [[{ "node": "Section Loop", "type": "main", "index": 0 }]] },
-    "Section Loop": { "main": [[{ "node": "Prep Finalize", "type": "main", "index": 0 }]] },
+    "Plan Document": { "main": [[{ "node": "Flatten Chunks", "type": "main", "index": 0 }]] },
+    "Flatten Chunks": { "main": [[{ "node": "Loop Over Items", "type": "main", "index": 0 }]] },
+    "Loop Over Items": {
+      "main": [
+        [{ "node": "Assemble Document", "type": "main", "index": 0 }],
+        [{ "node": "Prep Write", "type": "main", "index": 0 }]
+      ]
+    },
+    "Prep Write": { "main": [[{ "node": "Write Section", "type": "main", "index": 0 }]] },
+    "Write Section": { "main": [[{ "node": "Prep Validate", "type": "main", "index": 0 }]] },
+    "Prep Validate": { "main": [[{ "node": "Validate Section", "type": "main", "index": 0 }]] },
+    "Validate Section": { "main": [[{ "node": "Accumulate Section", "type": "main", "index": 0 }]] },
+    "Accumulate Section": { "main": [[{ "node": "Loop Over Items", "type": "main", "index": 0 }]] },
+    "Assemble Document": { "main": [[{ "node": "Prep Finalize", "type": "main", "index": 0 }]] },
     "Prep Finalize": { "main": [[{ "node": "Finalize Document", "type": "main", "index": 0 }]] },
     "Finalize Document": { "main": [[{ "node": "Pipeline Complete", "type": "main", "index": 0 }]] }
   },
