@@ -45,7 +45,7 @@
       "type": "n8n-nodes-base.code",
       "position": [260, 360],
       "parameters": {
-        "jsCode": "const jobId = $json.query?.jobId || '';\nif (!jobId) return [{ json: { status: 'error', message: 'Липсва jobId' } }];\n\nconst sd = $getWorkflowStaticData('global');\nconst job = sd.jobs?.[jobId];\n\nif (!job) {\n  return [{ json: { status: 'not_found', phase: 'unknown', progress: 0, message: 'Заявка не е намерена' } }];\n}\n\nconst resp = {\n  status: job.status || 'processing',\n  phase: job.phase || 'init',\n  progress: job.progress || 0,\n  message: job.message || 'Обработка...'\n};\n\nif (job.status === 'completed' && job.result) {\n  resp.result = { stats: job.result.stats, hasDocument: true };\n}\n\nreturn [{ json: resp }];"
+        "jsCode": "const jobId = $json.query?.jobId || '';\nif (!jobId) return [{ json: { status: 'error', message: 'Липсва jobId' } }];\n\nconst sd = $getWorkflowStaticData('global');\nconst job = sd.jobs?.[jobId];\n\nif (!job) {\n  return [{ json: { status: 'not_found', phase: 'unknown', progress: 0, message: 'Заявка не е намерена' } }];\n}\n\nconst resp = {\n  status: job.status || 'processing',\n  phase: job.phase || 'init',\n  progress: job.progress || 0,\n  message: job.message || 'Обработка...'\n};\n\nif (job.status === 'completed' && job.result) {\n  resp.result = { stats: job.result.stats || {}, hasDocument: true };\n}\n\nreturn [{ json: resp }];"
       },
       "typeVersion": 2
     },

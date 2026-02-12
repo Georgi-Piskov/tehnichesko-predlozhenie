@@ -271,10 +271,10 @@ async function onGenerationComplete(status) {
     document.getElementById('progressText').textContent = 'Готово!';
 
     // Update stats
-    if (status.result) {
-        document.getElementById('statPages').textContent = status.result.pages || '—';
-        document.getElementById('statSections').textContent = status.result.sections || '—';
-        document.getElementById('statPlaceholders').textContent = status.result.placeholders || '—';
+    if (status.result && status.result.stats) {
+        document.getElementById('statPages').textContent = status.result.stats.estimatedPages || '—';
+        document.getElementById('statSections').textContent = status.result.stats.sections || '—';
+        document.getElementById('statPlaceholders').textContent = status.result.stats.placeholderCount || '—';
     }
 
     showToast('Техническото предложение е генерирано успешно!', 'success');
@@ -329,7 +329,7 @@ async function downloadResult(format) {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `Техническо_предложение_${new Date().toISOString().slice(0, 10)}.docx`;
+        a.download = `Техническо_предложение_${new Date().toISOString().slice(0, 10)}.md`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
