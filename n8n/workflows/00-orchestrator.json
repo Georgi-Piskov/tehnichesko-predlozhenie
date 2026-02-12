@@ -88,6 +88,9 @@
         "jsonBody": "={{ JSON.stringify($json) }}",
         "options": { "timeout": 180000 }
       },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 15000,
       "typeVersion": 4.2
     },
     {
@@ -113,6 +116,9 @@
         "jsonBody": "={{ JSON.stringify($json) }}",
         "options": { "timeout": 180000 }
       },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 15000,
       "typeVersion": 4.2
     },
     {
@@ -138,6 +144,9 @@
         "jsonBody": "={{ JSON.stringify($('After Spec Analysis').first().json) }}",
         "options": { "timeout": 180000 }
       },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 15000,
       "typeVersion": 4.2
     },
     {
@@ -194,6 +203,9 @@
         "jsonBody": "={{ JSON.stringify($json) }}",
         "options": { "timeout": 600000 }
       },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 15000,
       "typeVersion": 4.2
     },
     {
@@ -229,6 +241,9 @@
         "jsonBody": "={{ JSON.stringify($json) }}",
         "options": { "timeout": 180000 }
       },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 15000,
       "typeVersion": 4.2
     },
     {
@@ -254,6 +269,9 @@
         "jsonBody": "={{ JSON.stringify($json) }}",
         "options": { "timeout": 120000 }
       },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 15000,
       "typeVersion": 4.2
     },
     {
@@ -310,6 +328,9 @@
         "jsonBody": "={{ JSON.stringify($json) }}",
         "options": { "timeout": 180000 }
       },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 15000,
       "typeVersion": 4.2
     },
     {

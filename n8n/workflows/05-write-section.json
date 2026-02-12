@@ -70,7 +70,7 @@
       "type": "n8n-nodes-base.code",
       "position": [780, 300],
       "parameters": {
-        "jsCode": "var raw = ($json.text || $json.response || '').trim();\nvar wordCount = raw.split(/\\s+/).length;\nvar placeholders = (raw.match(/\\[⚠️ ПОПЪЛНЕТЕ:/g) || []).length;\nvar tableCount = (raw.match(/\\|.*\\|/g) || []).length;\n\nreturn [{\n  json: {\n    sectionText: raw,\n    stats: {\n      wordCount: wordCount,\n      estimatedPages: Math.round(wordCount / 375),\n      placeholders: placeholders,\n      tables: Math.floor(tableCount / 3)\n    }\n  }\n}];"
+        "jsCode": "var raw = ($json.text || $json.response || '').trim();\n\n// Handle error from chainLlm (onError: continueRegularOutput)\nif ($json.error || $json.errorMessage || (!raw && $input.first().json.error)) {\n  var errMsg = $json.errorMessage || $json.error || 'Unknown AI error';\n  if (typeof errMsg === 'object') errMsg = JSON.stringify(errMsg);\n  return [{\n    json: {\n      sectionText: '',\n      error: true,\n      errorMessage: String(errMsg).substring(0, 500),\n      stats: { wordCount: 0, estimatedPages: 0, placeholders: 0, tables: 0 }\n    }\n  }];\n}\n\nvar wordCount = raw.split(/\\s+/).length;\nvar placeholders = (raw.match(/\\[⚠️ ПОПЪЛНЕТЕ:/g) || []).length;\nvar tableCount = (raw.match(/\\|.*\\|/g) || []).length;\n\nreturn [{\n  json: {\n    sectionText: raw,\n    stats: {\n      wordCount: wordCount,\n      estimatedPages: Math.round(wordCount / 375),\n      placeholders: placeholders,\n      tables: Math.floor(tableCount / 3)\n    }\n  }\n}];"
       },
       "typeVersion": 2
     },

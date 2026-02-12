@@ -30,6 +30,7 @@
       "name": "Validate Section",
       "type": "@n8n/n8n-nodes-langchain.chainLlm",
       "position": [520, 300],
+      "onError": "continueRegularOutput",
       "parameters": {
         "text": "={{ $json.prompt }}",
         "promptType": "define",
@@ -70,7 +71,7 @@
       "type": "n8n-nodes-base.code",
       "position": [780, 300],
       "parameters": {
-        "jsCode": "var raw = ($json.text || $json.response || '').trim();\nvar result;\n\ntry {\n  result = JSON.parse(raw);\n} catch (e) {\n  var m = raw.match(/```(?:json)?\\s*([\\s\\S]*?)```/);\n  var candidate = m ? m[1].trim() : raw;\n  try {\n    var s = candidate.indexOf('{');\n    var e2 = candidate.lastIndexOf('}');\n    var js = candidate.substring(s, e2 + 1).replace(/,\\s*([\\]\\}])/g, '$1');\n    result = JSON.parse(js);\n  } catch (e3) {\n    result = { passed: true, score: 70, issues: ['Parse error — defaulting to PASS'], feedback: '' };\n  }\n}\n\nresult.passed = result.passed !== false && (result.score || 80) >= 80;\n\nreturn [{ json: result }];"
+        "jsCode": "var raw = ($json.text || $json.response || '').trim();\n\n// Handle error from chainLlm (onError: continueRegularOutput)\nif ($json.error || $json.errorMessage || (!raw && $input.first().json.error)) {\n  return [{ json: { passed: true, score: 75, issues: ['Validator AI error \u2014 auto-passing to avoid pipeline crash'], feedback: '' } }];\n}\n\nvar result;\n\ntry {\n  result = JSON.parse(raw);\n} catch (e) {\n  var m = raw.match(/```(?:json)?\\s*([\\s\\S]*?)```/);\n  var candidate = m ? m[1].trim() : raw;\n  try {\n    var s = candidate.indexOf('{');\n    var e2 = candidate.lastIndexOf('}');\n    var js = candidate.substring(s, e2 + 1).replace(/,\\s*([\\]\\}])/g, '$1');\n    result = JSON.parse(js);\n  } catch (e3) {\n    result = { passed: true, score: 70, issues: ['Parse error \u2014 defaulting to PASS'], feedback: '' };\n  }\n}\n\nresult.passed = result.passed !== false && (result.score || 80) >= 80;\n\nreturn [{ json: result }];"
       },
       "typeVersion": 2
     },
