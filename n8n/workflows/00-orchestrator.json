@@ -214,7 +214,7 @@
       "type": "n8n-nodes-base.code",
       "position": [300, 1100],
       "parameters": {
-        "jsCode": "var finalText = $json.finalText || $json.draftText || '';\nvar wc = finalText.trim().split(/\\s+/).length;\nreturn [{ json: {\n  success: true,\n  finalDocument: finalText,\n  statusPayload: {\n    jobId: $('Init Job').first().json.jobId,\n    status: 'completed',\n    phase: 'completed',\n    progress: 100,\n    message: 'Готово!',\n    result: {\n      text: finalText,\n      stats: { wordCount: wc, estimatedPages: Math.round(wc / 375) }\n    }\n  }\n} }];"
+        "jsCode": "var ad = $('Assemble Document').first().json;\nvar finalText = ad.fullDocument || '';\nvar wc = finalText.trim().split(/\\s+/).length;\nvar sr = ad.sectionResults || [];\nreturn [{ json: {\n  success: true,\n  finalDocument: finalText,\n  statusPayload: {\n    jobId: $('Init Job').first().json.jobId,\n    status: 'completed',\n    phase: 'completed',\n    progress: 100,\n    message: 'Готово!',\n    result: {\n      text: finalText,\n      stats: { wordCount: wc, estimatedPages: Math.round(wc / 375), sections: sr.length }\n    }\n  }\n} }];"
       },
       "typeVersion": 2
     },
@@ -481,11 +481,9 @@
     "Rewrite Section": { "main": [[{ "node": "Accumulate Retry", "type": "main", "index": 0 }]] },
     "Accumulate Retry": { "main": [[{ "node": "Loop Over Items", "type": "main", "index": 0 }]] },
     "Assemble Document": { "main": [[
-      { "node": "Prep Finalize", "type": "main", "index": 0 },
+      { "node": "Pipeline Complete", "type": "main", "index": 0 },
       { "node": "Status: Finalizing", "type": "main", "index": 0 }
     ]] },
-    "Prep Finalize": { "main": [[{ "node": "Finalize Document", "type": "main", "index": 0 }]] },
-    "Finalize Document": { "main": [[{ "node": "Pipeline Complete", "type": "main", "index": 0 }]] },
     "Pipeline Complete": { "main": [[{ "node": "Status: Complete", "type": "main", "index": 0 }]] }
   },
   "settings": { "executionOrder": "v1" }
