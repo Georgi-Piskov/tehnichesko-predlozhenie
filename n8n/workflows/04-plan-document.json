@@ -81,7 +81,7 @@
       "position": [1040, 300],
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ $json }}"
+        "responseBody": "={{ JSON.stringify($json) }}"
       },
       "typeVersion": 1.1
     }

@@ -224,12 +224,68 @@
       "typeVersion": 4.2
     },
     {
+      "id": "check-validation",
+      "name": "Check Validation",
+      "type": "n8n-nodes-base.if",
+      "position": [1760, 920],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "cond1",
+              "leftValue": "={{ $json.passed }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "equals", "singleValue": true }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "typeVersion": 2.2
+    },
+    {
       "id": "accumulate-section",
       "name": "Accumulate Section",
       "type": "n8n-nodes-base.code",
-      "position": [1760, 920],
+      "position": [2020, 820],
       "parameters": {
-        "jsCode": "var sd = $getWorkflowStaticData('global');\nvar pw = $('Prep Write').first().json;\nvar writeRes = $('Write Section').first().json;\nvar valRes = $json;\n\nvar chunk = pw.section;\nvar secText = writeRes.sectionText || writeRes.text || '';\n\nif (chunk.parentTitle && chunk.parentTitle !== sd.lastParent) {\n  sd.fullDoc += '## ' + (chunk.parentId || '') + '. ' + chunk.parentTitle + '\\n\\n';\n  sd.lastParent = chunk.parentTitle;\n}\n\nsd.fullDoc += secText + '\\n\\n';\nsd.results.push({\n  id: chunk.id,\n  title: chunk.title,\n  wordCount: secText.trim().split(/\\s+/).length,\n  passed: valRes.passed || false,\n  score: valRes.score || 0\n});\n\nreturn [{ json: { ok: true } }];"
+        "jsCode": "var sd = $getWorkflowStaticData('global');\nvar pw = $('Prep Write').first().json;\nvar writeRes = $('Write Section').first().json;\n\nvar chunk = pw.section;\nvar secText = writeRes.sectionText || writeRes.text || '';\n\nif (chunk.parentTitle && chunk.parentTitle !== sd.lastParent) {\n  sd.fullDoc += '## ' + (chunk.parentId || '') + '. ' + chunk.parentTitle + '\\n\\n';\n  sd.lastParent = chunk.parentTitle;\n}\n\nsd.fullDoc += secText + '\\n\\n';\nsd.results.push({\n  id: chunk.id,\n  title: chunk.title,\n  wordCount: secText.trim().split(/\\s+/).length,\n  passed: true,\n  score: $('Validate Section').first().json.score || 100,\n  attempts: 1\n});\n\nreturn [{ json: { ok: true } }];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "prep-rewrite",
+      "name": "Prep Rewrite",
+      "type": "n8n-nodes-base.code",
+      "position": [2020, 1040],
+      "parameters": {
+        "jsCode": "var sd = $getWorkflowStaticData('global');\nvar pw = $('Prep Write').first().json;\nvar valResult = $json;\nvar prevCtx = sd.fullDoc || '';\nif (prevCtx.length > 2000) prevCtx = prevCtx.substring(prevCtx.length - 2000);\n\nvar fb = valResult.feedback || '';\nif (valResult.issues && Array.isArray(valResult.issues)) {\n  fb += '\\n\\nКонкретни проблеми:\\n';\n  for (var i = 0; i < valResult.issues.length; i++) {\n    fb += '- ' + valResult.issues[i] + '\\n';\n  }\n}\n\nreturn [{ json: {\n  section: pw.section,\n  requirements: pw.requirements,\n  specData: pw.specData,\n  contractorInfo: pw.contractorInfo,\n  previousContext: prevCtx,\n  feedback: fb,\n  procurementType: pw.procurementType,\n  sectionIndex: pw.sectionIndex,\n  totalSections: pw.totalSections\n} }];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "rewrite-section",
+      "name": "Rewrite Section",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [2280, 1040],
+      "parameters": {
+        "method": "POST",
+        "url": "https://n8n.simeontsvetanovn8nworkflows.site/webhook/tp-write-section",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": { "timeout": 180000 }
+      },
+      "typeVersion": 4.2
+    },
+    {
+      "id": "accumulate-retry",
+      "name": "Accumulate Retry",
+      "type": "n8n-nodes-base.code",
+      "position": [2540, 1040],
+      "parameters": {
+        "jsCode": "var sd = $getWorkflowStaticData('global');\nvar pw = $('Prep Write').first().json;\nvar rewriteRes = $json;\n\nvar chunk = pw.section;\nvar secText = rewriteRes.sectionText || rewriteRes.text || '';\n\nif (chunk.parentTitle && chunk.parentTitle !== sd.lastParent) {\n  sd.fullDoc += '## ' + (chunk.parentId || '') + '. ' + chunk.parentTitle + '\\n\\n';\n  sd.lastParent = chunk.parentTitle;\n}\n\nsd.fullDoc += secText + '\\n\\n';\nsd.results.push({\n  id: chunk.id,\n  title: chunk.title,\n  wordCount: secText.trim().split(/\\s+/).length,\n  passed: false,\n  score: $('Validate Section').first().json.score || 0,\n  attempts: 2\n});\n\nreturn [{ json: { ok: true } }];"
       },
       "typeVersion": 2
     },
@@ -303,8 +359,17 @@
     "Prep Write": { "main": [[{ "node": "Write Section", "type": "main", "index": 0 }]] },
     "Write Section": { "main": [[{ "node": "Prep Validate", "type": "main", "index": 0 }]] },
     "Prep Validate": { "main": [[{ "node": "Validate Section", "type": "main", "index": 0 }]] },
-    "Validate Section": { "main": [[{ "node": "Accumulate Section", "type": "main", "index": 0 }]] },
+    "Validate Section": { "main": [[{ "node": "Check Validation", "type": "main", "index": 0 }]] },
+    "Check Validation": {
+      "main": [
+        [{ "node": "Accumulate Section", "type": "main", "index": 0 }],
+        [{ "node": "Prep Rewrite", "type": "main", "index": 0 }]
+      ]
+    },
     "Accumulate Section": { "main": [[{ "node": "Loop Over Items", "type": "main", "index": 0 }]] },
+    "Prep Rewrite": { "main": [[{ "node": "Rewrite Section", "type": "main", "index": 0 }]] },
+    "Rewrite Section": { "main": [[{ "node": "Accumulate Retry", "type": "main", "index": 0 }]] },
+    "Accumulate Retry": { "main": [[{ "node": "Loop Over Items", "type": "main", "index": 0 }]] },
     "Assemble Document": { "main": [[{ "node": "Prep Finalize", "type": "main", "index": 0 }]] },
     "Prep Finalize": { "main": [[{ "node": "Finalize Document", "type": "main", "index": 0 }]] },
     "Finalize Document": { "main": [[{ "node": "Pipeline Complete", "type": "main", "index": 0 }]] }
