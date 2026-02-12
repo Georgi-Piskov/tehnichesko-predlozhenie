@@ -7,7 +7,7 @@ const CONFIG = {
     // Set this to your n8n webhook base URL
     N8N_WEBHOOK_URL: 'https://n8n.simeontsvetanovn8nworkflows.site',
     POLL_INTERVAL: 4000, // Poll every 4 seconds
-    MAX_POLL_TIME: 30 * 60 * 1000 // 30 minute timeout
+    MAX_POLL_TIME: 90 * 60 * 1000 // 90 minute timeout
 };
 
 let currentStep = 1;
@@ -158,7 +158,8 @@ function startPolling() {
         // Timeout check
         if (Date.now() - startTime > CONFIG.MAX_POLL_TIME) {
             clearInterval(pollTimer);
-            showToast('Времето за изчакване изтече. Моля, опитайте отново.', 'error');
+            showToast('Времето за изчакване изтече. Натиснете "Провери статус" за ръчна проверка.', 'error');
+            showManualRefresh();
             return;
         }
 
@@ -186,6 +187,7 @@ function handleStatusUpdate(status) {
         'extracting_requirements': 'extract',
         'analyzing_spec': 'analyze',
         'planning': 'plan',
+        'writing_sections': 'write',
         'writing': 'write',
         'validating': 'validate',
         'finalizing': 'finalize',
@@ -213,11 +215,11 @@ function handleStatusUpdate(status) {
             updatePhase(phase, 'completed');
         } else if (idx === currentIdx) {
             updatePhase(phase, 'active');
-            // Update writing progress
-            if (phase === 'write' && status.writingProgress) {
+            // Update writing progress text from status message
+            if (phase === 'write' && status.message) {
                 const phaseEl = document.querySelector(`[data-phase="write"] span:last-child`);
                 if (phaseEl) {
-                    phaseEl.textContent = `Писане на секции (${status.writingProgress.current}/${status.writingProgress.total})`;
+                    phaseEl.textContent = status.message;
                 }
             }
         }
@@ -336,6 +338,44 @@ async function downloadResult(format) {
         URL.revokeObjectURL(url);
     } catch (error) {
         showToast(`Грешка при изтегляне: ${error.message}`, 'error');
+    }
+}
+
+// ===== Manual Status Check =====
+function showManualRefresh() {
+    const container = document.getElementById('progressPhases');
+    if (document.getElementById('manualRefreshBtn')) return;
+    const btn = document.createElement('button');
+    btn.id = 'manualRefreshBtn';
+    btn.className = 'btn btn-success';
+    btn.style.marginTop = '1rem';
+    btn.style.width = '100%';
+    btn.textContent = '🔄 Провери статус';
+    btn.onclick = manualCheckStatus;
+    container.appendChild(btn);
+}
+
+async function manualCheckStatus() {
+    if (!currentJobId) {
+        showToast('Няма активна заявка.', 'error');
+        return;
+    }
+    try {
+        showToast('Проверка...', 'success');
+        const status = await API.getJobStatus(currentJobId);
+        handleStatusUpdate(status);
+        if (status.status === 'completed') {
+            const btn = document.getElementById('manualRefreshBtn');
+            if (btn) btn.remove();
+            onGenerationComplete(status);
+        } else if (status.status === 'error') {
+            onGenerationError(status);
+        } else {
+            showToast(`Статус: ${status.message || status.phase || 'Обработка...'}`, 'success');
+            startPolling();
+        }
+    } catch (error) {
+        showToast(`Грешка: ${error.message}`, 'error');
     }
 }
 

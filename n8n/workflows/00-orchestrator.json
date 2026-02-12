@@ -420,6 +420,21 @@
       "typeVersion": 4.2
     },
     {
+      "id": "s07",
+      "name": "Status: Writing",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [700, 1250],
+      "parameters": {
+        "method": "POST",
+        "url": "https://n8n.simeontsvetanovn8nworkflows.site/webhook/internal/update-status",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ jobId: $('Init Job').first().json.jobId, status: 'processing', phase: 'writing_sections', progress: Math.round(50 + ($json.sectionIndex / $json.totalSections) * 38), message: 'Писане на секция ' + ($json.sectionIndex + 1) + ' от ' + $json.totalSections + '...' }) }}",
+        "options": { "timeout": 10000 }
+      },
+      "typeVersion": 4.2
+    },
+    {
       "id": "s06",
       "name": "Status: Complete",
       "type": "n8n-nodes-base.httpRequest",
@@ -466,7 +481,10 @@
         [{ "node": "Prep Write", "type": "main", "index": 0 }]
       ]
     },
-    "Prep Write": { "main": [[{ "node": "Write Section", "type": "main", "index": 0 }]] },
+    "Prep Write": { "main": [[
+      { "node": "Write Section", "type": "main", "index": 0 },
+      { "node": "Status: Writing", "type": "main", "index": 0 }
+    ]] },
     "Write Section": { "main": [[{ "node": "Prep Validate", "type": "main", "index": 0 }]] },
     "Prep Validate": { "main": [[{ "node": "Validate Section", "type": "main", "index": 0 }]] },
     "Validate Section": { "main": [[{ "node": "Check Validation", "type": "main", "index": 0 }]] },
