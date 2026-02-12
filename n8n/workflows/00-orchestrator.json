@@ -452,10 +452,12 @@
   ],
   "connections": {
     "Webhook": { "main": [[{ "node": "Init Job", "type": "main", "index": 0 }]] },
-    "Init Job": { "main": [[{ "node": "Send Response", "type": "main", "index": 0 }]] },
-    "Send Response": { "main": [[
-      { "node": "Split Binary Files", "type": "main", "index": 0 },
+    "Init Job": { "main": [[
+      { "node": "Send Response", "type": "main", "index": 0 },
       { "node": "Status: Init", "type": "main", "index": 0 }
+    ]] },
+    "Send Response": { "main": [[
+      { "node": "Split Binary Files", "type": "main", "index": 0 }
     ]] },
     "Split Binary Files": { "main": [[{ "node": "Extract from PDF", "type": "main", "index": 0 }]] },
     "Extract from PDF": { "main": [[{ "node": "Merge Texts", "type": "main", "index": 0 }]] },

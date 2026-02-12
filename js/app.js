@@ -13,6 +13,8 @@ const CONFIG = {
 let currentStep = 1;
 let currentJobId = null;
 let pollTimer = null;
+let pollStartTime = null;
+let notFoundCount = 0;
 
 // ===== Initialize =====
 document.addEventListener('DOMContentLoaded', () => {
@@ -152,36 +154,62 @@ async function startGeneration() {
 function startPolling() {
     if (pollTimer) clearInterval(pollTimer);
 
-    const startTime = Date.now();
+    pollStartTime = Date.now();
+    notFoundCount = 0;
 
-    pollTimer = setInterval(async () => {
-        // Timeout check
-        if (Date.now() - startTime > CONFIG.MAX_POLL_TIME) {
+    // Initial delay: give Status:Init time to fire before first poll
+    setTimeout(() => {
+        doPoll(); // First poll
+        pollTimer = setInterval(doPoll, CONFIG.POLL_INTERVAL);
+    }, 8000);
+}
+
+async function doPoll() {
+    // Timeout check
+    if (Date.now() - pollStartTime > CONFIG.MAX_POLL_TIME) {
+        clearInterval(pollTimer);
+        showToast('Времето за изчакване изтече. Натиснете "Провери статус" за ръчна проверка.', 'error');
+        showManualRefresh();
+        return;
+    }
+
+    try {
+        const status = await API.getJobStatus(currentJobId);
+        handleStatusUpdate(status);
+
+        if (status.status === 'completed') {
             clearInterval(pollTimer);
-            showToast('Времето за изчакване изтече. Натиснете "Провери статус" за ръчна проверка.', 'error');
-            showManualRefresh();
-            return;
+            onGenerationComplete(status);
+        } else if (status.status === 'error') {
+            clearInterval(pollTimer);
+            onGenerationError(status);
         }
-
-        try {
-            const status = await API.getJobStatus(currentJobId);
-            handleStatusUpdate(status);
-
-            if (status.status === 'completed') {
-                clearInterval(pollTimer);
-                onGenerationComplete(status);
-            } else if (status.status === 'error') {
-                clearInterval(pollTimer);
-                onGenerationError(status);
-            }
-        } catch (error) {
-            console.error('Polling error:', error);
-            // Don't stop polling on transient errors
-        }
-    }, CONFIG.POLL_INTERVAL);
+    } catch (error) {
+        console.error('Polling error:', error);
+        // Don't stop polling on transient errors
+    }
 }
 
 function handleStatusUpdate(status) {
+    // Handle 'not_found' — status API hasn't received the job yet
+    if (status.status === 'not_found') {
+        notFoundCount++;
+        const elapsed = Date.now() - (pollStartTime || Date.now());
+        if (elapsed < 60000) {
+            document.getElementById('progressText').textContent = 'Инициализация на заявката...';
+        } else if (elapsed < 120000) {
+            document.getElementById('progressText').textContent = 'Очакване на статус... Моля, изчакайте.';
+        } else {
+            document.getElementById('progressText').textContent = '⚠️ Няма статус. Проверете дали TP-Status API е активиран в n8n.';
+            showManualRefresh();
+        }
+        console.log(`Poll #${notFoundCount}: not_found (${Math.round(elapsed/1000)}s elapsed)`);
+        return;
+    }
+
+    // Reset not-found counter on successful status
+    notFoundCount = 0;
+
     const phaseMap = {
         'uploading': 'upload',
         'extracting_requirements': 'extract',
