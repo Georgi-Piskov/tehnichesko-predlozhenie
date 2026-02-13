@@ -345,6 +345,40 @@
     },
 
     {
+      "id": "gdrive1",
+      "name": "Save to Google Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "position": [600, 1400],
+      "parameters": {
+        "resource": "file",
+        "operation": "createFromText",
+        "name": "=ТП_{{ $now.format('yyyy-MM-dd_HHmm') }}",
+        "content": "={{ $json.finalDocument }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "MyDrive"
+        },
+        "folderId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "root"
+        },
+        "options": {
+          "convertToGoogleDocument": true
+        }
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "CONFIGURE_IN_N8N",
+          "name": "CONFIGURE_IN_N8N"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "typeVersion": 3
+    },
+
+    {
       "id": "s01",
       "name": "Status: Init",
       "type": "n8n-nodes-base.httpRequest",
@@ -504,7 +538,10 @@
       { "node": "Pipeline Complete", "type": "main", "index": 0 },
       { "node": "Status: Finalizing", "type": "main", "index": 0 }
     ]] },
-    "Pipeline Complete": { "main": [[{ "node": "Status: Complete", "type": "main", "index": 0 }]] }
+    "Pipeline Complete": { "main": [[
+      { "node": "Status: Complete", "type": "main", "index": 0 },
+      { "node": "Save to Google Drive", "type": "main", "index": 0 }
+    ]] }
   },
   "settings": { "executionOrder": "v1" }
 }
