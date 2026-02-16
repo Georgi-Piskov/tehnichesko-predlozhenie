@@ -59,7 +59,7 @@
       "type": "n8n-nodes-base.code",
       "position": [700, 300],
       "parameters": {
-        "jsCode": "var input = $input.first();\nvar text = '';\n\n// Case 1: Binary data (Google Drive download)\nif (input.binary) {\n  var k = Object.keys(input.binary);\n  if (k.length > 0) {\n    text = Buffer.from(input.binary[k[0]].data, 'base64').toString('utf-8');\n  }\n}\n\n// Case 2: Text in JSON\nif (!text && input.json) {\n  text = input.json.text || input.json.content || '';\n}\n\nif (!text || text.length < 50) {\n  throw new Error('Не може да се извлече текст. Проверете: 1) File ID правилен ли е? 2) Google Drive credential конфигуриран ли е?');\n}\n\nreturn [{ json: { documentText: text } }];"
+        "jsCode": "// Use n8n helper to properly read binary data (handles filesystem storage)\nvar items = $input.all();\nvar text = '';\n\n// Case 1: Binary data from Google Drive download\nif (items[0].binary && items[0].binary.data) {\n  var buf = await this.helpers.getBinaryDataBuffer(0, 'data');\n  text = buf.toString('utf-8');\n}\n\n// Case 2: Text in JSON\nif (!text && items[0].json) {\n  text = items[0].json.text || items[0].json.content || '';\n}\n\nif (!text || text.length < 50) {\n  throw new Error('Не може да се извлече текст. Дължина: ' + (text ? text.length : 0) + '. Проверете File ID.');\n}\n\nreturn [{ json: { documentText: text } }];"
       },
       "typeVersion": 2
     },
