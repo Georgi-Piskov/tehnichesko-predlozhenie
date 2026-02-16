@@ -1,0 +1,259 @@
+{
+  "name": "10 - Format Document",
+  "nodes": [
+    {
+      "id": "trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "position": [0, 300],
+      "parameters": {},
+      "typeVersion": 1
+    },
+
+    {
+      "id": "config",
+      "name": "Config",
+      "type": "n8n-nodes-base.code",
+      "position": [220, 300],
+      "parameters": {
+        "jsCode": "// ⚙️ КОНФИГУРАЦИЯ — Попълнете преди стартиране!\n// sourceFileId: ID на документа от URL в Google Drive\n// (напр. https://docs.google.com/document/d/ТОЗИ_ID/edit)\n//\n// outputName: Име на новия форматиран документ\n// outputFolderId: ID на папка в Google Drive (празно = root)\n\nreturn [{\n  json: {\n    sourceFileId: 'PASTE_FILE_ID_HERE',\n    outputName: 'ТП_Форматиран',\n    outputFolderId: ''\n  }\n}];"
+      },
+      "typeVersion": 2,
+      "notes": "⬇️ РЕДАКТИРАЙТЕ полетата преди стартиране!",
+      "notesInFlow": true
+    },
+
+    {
+      "id": "download",
+      "name": "Download from Google Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "position": [460, 300],
+      "parameters": {
+        "resource": "file",
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.sourceFileId }}"
+        },
+        "options": {
+          "googleFileConversion": {
+            "conversion": {
+              "docsToFormat": "text/plain"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "CONFIGURE_IN_N8N",
+          "name": "CONFIGURE_IN_N8N"
+        }
+      },
+      "typeVersion": 3
+    },
+
+    {
+      "id": "toText",
+      "name": "Extract Text",
+      "type": "n8n-nodes-base.code",
+      "position": [700, 300],
+      "parameters": {
+        "jsCode": "var input = $input.first();\nvar text = '';\n\n// Case 1: Binary data (Google Drive download)\nif (input.binary) {\n  var k = Object.keys(input.binary);\n  if (k.length > 0) {\n    text = Buffer.from(input.binary[k[0]].data, 'base64').toString('utf-8');\n  }\n}\n\n// Case 2: Text in JSON\nif (!text && input.json) {\n  text = input.json.text || input.json.content || '';\n}\n\nif (!text || text.length < 50) {\n  throw new Error('Не може да се извлече текст. Проверете: 1) File ID правилен ли е? 2) Google Drive credential конфигуриран ли е?');\n}\n\nreturn [{ json: { documentText: text } }];"
+      },
+      "typeVersion": 2
+    },
+
+    {
+      "id": "split",
+      "name": "Split into Sections",
+      "type": "n8n-nodes-base.code",
+      "position": [940, 300],
+      "parameters": {
+        "jsCode": "var text = $json.documentText;\nvar sections = [];\n\n// Опит 1: Раздели по ## хедъри\nvar parts = text.split(/(?=^## )/m);\n\nif (parts.length <= 1) {\n  // Опит 2: Раздели по ### хедъри\n  parts = text.split(/(?=^### )/m);\n}\n\nif (parts.length <= 1) {\n  // Опит 3: Раздели на ~3000-думови парчета\n  var words = text.split(/\\s+/);\n  for (var i = 0; i < words.length; i += 3000) {\n    sections.push({\n      index: sections.length,\n      title: 'Част ' + (sections.length + 1),\n      content: words.slice(i, Math.min(i + 3000, words.length)).join(' ')\n    });\n  }\n} else {\n  for (var p = 0; p < parts.length; p++) {\n    var part = parts[p].trim();\n    if (!part) continue;\n    var m = part.match(/^#{2,4}\\s+(.+)/m);\n    sections.push({\n      index: sections.length,\n      title: m ? m[1].trim() : 'Част ' + (sections.length + 1),\n      content: part\n    });\n  }\n}\n\nvar total = sections.length;\nreturn sections.map(function(s) {\n  s.totalSections = total;\n  return { json: s };\n});"
+      },
+      "typeVersion": 2
+    },
+
+    {
+      "id": "loop",
+      "name": "Loop Over Sections",
+      "type": "n8n-nodes-base.splitInBatches",
+      "position": [1180, 300],
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "typeVersion": 3
+    },
+
+    {
+      "id": "prep",
+      "name": "Prep Format Prompt",
+      "type": "n8n-nodes-base.code",
+      "position": [1180, 580],
+      "parameters": {
+        "jsCode": "var s = $json;\nvar prompt = 'Форматирай секция ' + (s.index + 1) + ' от ' + s.totalSections + '.\\n\\n';\nprompt += 'ВХОДЕН ТЕКСТ (Markdown):\\n---\\n' + s.content + '\\n---\\n\\n';\nprompt += 'ПРАВИЛА:\\n';\nprompt += '1. Markdown таблици (| col1 | col2 |) → HTML <table> с borders, thead, tbody\\n';\nprompt += '2. ## → <h2>, ### → <h3>, #### → <h4>\\n';\nprompt += '3. **bold** → <strong>, *italic* → <em>\\n';\nprompt += '4. Списъци: - → <ul><li>, номерирани → <ol><li>\\n';\nprompt += '5. Подчертай (<u>) нормативни документи и ключови изисквания\\n';\nprompt += '6. [⚠️ ПОПЪЛНЕТЕ:...] → маркирай с жълт фон (<span style=\"background-color:#fff3cd\">)\\n';\nprompt += '7. НЕ ПРОМЕНЯЙ съдържанието — само форматирането!\\n';\nprompt += '8. Върни САМО HTML фрагмент (без <html>/<head>/<body>)\\n';\nreturn [{ json: { prompt: prompt } }];"
+      },
+      "typeVersion": 2
+    },
+
+    {
+      "id": "model",
+      "name": "Claude Sonnet",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "position": [1340, 800],
+      "parameters": {
+        "model": "anthropic/claude-sonnet-4",
+        "options": {
+          "maxTokens": 16000,
+          "temperature": 0.15
+        }
+      },
+      "credentials": {
+        "openRouterApi": {
+          "id": "UjrrZkDAIpdRXbb8",
+          "name": "GP-Open_Router_Test"
+        }
+      },
+      "typeVersion": 1
+    },
+
+    {
+      "id": "format",
+      "name": "Format Section",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "position": [1440, 580],
+      "parameters": {
+        "text": "={{ $json.prompt }}",
+        "promptType": "define",
+        "messages": {
+          "messageValues": [
+            {
+              "type": "system",
+              "message": "You are a professional document formatter. Convert raw Markdown text into clean, well-structured HTML for import into Google Docs.\n\nRULES:\n1. Convert ALL Markdown tables to HTML <table> with: border='1' cellpadding='8' cellspacing='0' style='border-collapse:collapse; width:100%'\n2. Table header cells <th>: style='background-color:#f2f2f2; font-weight:bold; border:1px solid #333; padding:8px; text-align:left'\n3. Table data cells <td>: style='border:1px solid #666; padding:8px'\n4. Use <thead> for header row, <tbody> for data rows\n5. Headers: ## → <h2>, ### → <h3>, #### → <h4>\n6. **bold** → <strong>, *italic* → <em>\n7. Lists: - items → <ul><li>, numbered → <ol><li>\n8. Underline (<u>) regulatory references, law names, standard numbers (e.g. ISO, БДС, Наредба)\n9. Highlight [⚠️ ПОПЪЛНЕТЕ: ...] with <span style='background-color:#fff3cd; padding:2px 6px'>\n10. Wrap paragraphs in <p> tags\n11. DO NOT change, add, remove, or rephrase ANY content\n12. DO NOT add explanations, comments, or meta-text\n13. Return ONLY the HTML fragment — NO <html>, <head>, or <body> tags\n14. Preserve the original language (Bulgarian)"
+            }
+          ]
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 10000,
+      "onError": "continueRegularOutput",
+      "typeVersion": 1.4
+    },
+
+    {
+      "id": "acc",
+      "name": "Accumulate HTML",
+      "type": "n8n-nodes-base.code",
+      "position": [1700, 580],
+      "parameters": {
+        "jsCode": "var sd = $getWorkflowStaticData('global');\nif (!sd.htmlSections) sd.htmlSections = [];\n\nvar html = ($json.text || $json.response || '').trim();\nif (!html || $json.error || $json.errorMessage) {\n  html = '<p style=\"color:red;border:1px solid red;padding:8px\">⚠️ Грешка при форматиране на секция ' + (sd.htmlSections.length + 1) + '</p>';\n}\n\nsd.htmlSections.push(html);\n\nreturn [{ json: { accumulated: sd.htmlSections.length, status: 'ok' } }];"
+      },
+      "typeVersion": 2
+    },
+
+    {
+      "id": "assemble",
+      "name": "Assemble HTML Document",
+      "type": "n8n-nodes-base.code",
+      "position": [1560, 300],
+      "parameters": {
+        "jsCode": "var sd = $getWorkflowStaticData('global');\nvar sections = sd.htmlSections || [];\nvar config = $('Config').first().json;\n\nvar css = 'body{font-family:\"Times New Roman\",Georgia,serif;font-size:12pt;line-height:1.6;color:#1a1a1a;margin:40px}';\ncss += 'h1{font-size:18pt;font-weight:bold;margin-top:28pt;margin-bottom:14pt;border-bottom:2px solid #333;padding-bottom:6pt}';\ncss += 'h2{font-size:16pt;font-weight:bold;margin-top:24pt;margin-bottom:12pt}';\ncss += 'h3{font-size:14pt;font-weight:bold;margin-top:18pt;margin-bottom:10pt}';\ncss += 'h4{font-size:12pt;font-weight:bold;margin-top:14pt;margin-bottom:8pt}';\ncss += 'p{margin-bottom:8pt;text-align:justify}';\ncss += 'table{border-collapse:collapse;width:100%;margin:14pt 0}';\ncss += 'th{background-color:#f2f2f2;font-weight:bold;border:1px solid #333;padding:8px;text-align:left}';\ncss += 'td{border:1px solid #666;padding:8px}';\ncss += 'ul,ol{margin-left:24pt;margin-bottom:10pt}';\ncss += 'li{margin-bottom:4pt}';\n\nvar html = '<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><style>' + css + '</style></head><body>';\nhtml += sections.join('\\n');\nhtml += '</body></html>';\n\n// Clean staticData\ndelete sd.htmlSections;\n\n// Create binary for Google Drive upload\nvar base64 = Buffer.from(html, 'utf-8').toString('base64');\n\nreturn [{\n  json: {\n    outputName: config.outputName,\n    outputFolderId: config.outputFolderId,\n    sectionsCount: sections.length,\n    htmlSize: html.length\n  },\n  binary: {\n    data: {\n      data: base64,\n      mimeType: 'text/html',\n      fileName: config.outputName + '.html',\n      fileExtension: 'html'\n    }\n  }\n}];"
+      },
+      "typeVersion": 2
+    },
+
+    {
+      "id": "upload",
+      "name": "Upload to Google Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "position": [1820, 300],
+      "parameters": {
+        "resource": "file",
+        "operation": "upload",
+        "name": "={{ $json.outputName }}",
+        "inputDataFieldName": "data",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "MyDrive"
+        },
+        "folderId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.outputFolderId || 'root' }}"
+        },
+        "options": {
+          "convertToGoogleDocument": true
+        }
+      },
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "CONFIGURE_IN_N8N",
+          "name": "CONFIGURE_IN_N8N"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "typeVersion": 3
+    },
+
+    {
+      "id": "done",
+      "name": "Done",
+      "type": "n8n-nodes-base.code",
+      "position": [2080, 300],
+      "parameters": {
+        "jsCode": "var r = $input.first().json;\nreturn [{\n  json: {\n    message: '✅ Документът е форматиран и запазен в Google Drive!',\n    name: r.name || 'Форматиран документ',\n    id: r.id || '',\n    link: r.webViewLink || 'https://drive.google.com',\n    mimeType: r.mimeType || ''\n  }\n}];"
+      },
+      "typeVersion": 2
+    }
+  ],
+
+  "connections": {
+    "Manual Trigger": {
+      "main": [[{ "node": "Config", "type": "main", "index": 0 }]]
+    },
+    "Config": {
+      "main": [[{ "node": "Download from Google Drive", "type": "main", "index": 0 }]]
+    },
+    "Download from Google Drive": {
+      "main": [[{ "node": "Extract Text", "type": "main", "index": 0 }]]
+    },
+    "Extract Text": {
+      "main": [[{ "node": "Split into Sections", "type": "main", "index": 0 }]]
+    },
+    "Split into Sections": {
+      "main": [[{ "node": "Loop Over Sections", "type": "main", "index": 0 }]]
+    },
+    "Loop Over Sections": {
+      "main": [
+        [{ "node": "Prep Format Prompt", "type": "main", "index": 0 }],
+        [{ "node": "Assemble HTML Document", "type": "main", "index": 0 }]
+      ]
+    },
+    "Prep Format Prompt": {
+      "main": [[{ "node": "Format Section", "type": "main", "index": 0 }]]
+    },
+    "Claude Sonnet": {
+      "ai_languageModel": [[{ "node": "Format Section", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "Format Section": {
+      "main": [[{ "node": "Accumulate HTML", "type": "main", "index": 0 }]]
+    },
+    "Accumulate HTML": {
+      "main": [[{ "node": "Loop Over Sections", "type": "main", "index": 0 }]]
+    },
+    "Assemble HTML Document": {
+      "main": [[{ "node": "Upload to Google Drive", "type": "main", "index": 0 }]]
+    },
+    "Upload to Google Drive": {
+      "main": [[{ "node": "Done", "type": "main", "index": 0 }]]
+    }
+  },
+
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

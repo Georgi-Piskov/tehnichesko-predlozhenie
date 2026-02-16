@@ -125,6 +125,42 @@ Webhook POST /tp-generate
 - **НЕ СЕ ИЗПОЛЗВА** в текущия orchestrator — node-ът е disconnected
 - Причина: connection timeout + висока цена ($3-5 на опит, x3 retry = $9-15)
 
+### WF10 — Format Document (`10-format-document.json`) — НОВА
+**Отделен workflow за форматиране на генериран документ.** Не е част от pipeline-а.
+
+**Flow:**
+```
+Manual Trigger → Config (Set: fileId, outputName, folderId)
+→ Google Drive: Download (export as text/plain)
+→ Code: Extract Text (binary → text)
+→ Code: Split into Sections (по ## headers, fallback по ### или ~3000 думи)
+→ SplitInBatches (batchSize: 1)
+  → Code: Prep Format Prompt
+  → chainLlm (Claude Sonnet, temp 0.15): Markdown → HTML
+  → Code: Accumulate HTML (staticData)
+→ Code: Assemble HTML Document (CSS wrapper + binary output)
+→ Google Drive: Upload (HTML → Google Doc, convertToGoogleDocument: true)
+→ Done (link to formatted doc)
+```
+
+**Какво прави AI-ът:**
+- Конвертира Markdown таблици → HTML `<table>` с borders, thead, tbody
+- `##` → `<h2>`, `###` → `<h3>`, `**bold**` → `<strong>`
+- Подчертава (`<u>`) нормативни документи, стандарти, ключови изисквания
+- Маркира `[⚠️ ПОПЪЛНЕТЕ:]` placeholders с жълт фон
+- НЕ променя съдържанието — само форматирането
+
+**Как се ползва:**
+1. Импортирай в n8n
+2. Конфигурирай Google Drive credential
+3. Отвори "Config" node → попълни `sourceFileId` (от URL на Google Doc)
+4. Click "Test Workflow"
+5. Изчакай — резултатът се запазва като нов Google Doc
+
+**Credential:** Същият Google Drive OAuth2 (`CONFIGURE_IN_N8N`)
+**Модел:** Claude Sonnet 4 (temp: 0.15, maxTokens: 16000)
+**Error handling:** `onError: continueRegularOutput` на chainLlm + `retryOnFail: true` (2 опита)
+
 ### WF09 — Status API (`09-status-api.json`)
 - 4 webhook endpoints:
   - `POST /webhook/internal/update-status` → Store Status (uses `$getWorkflowStaticData('global').jobs[jobId]`)
@@ -188,7 +224,7 @@ OpenRouter Credential:
 Google Drive Credential:
   - ТРЯБВА ДА СЕ КОНФИГУРИРА РЪЧНО в n8n
   - Тип: googleDriveOAuth2Api
-  - В orchestrator.json: id/name е "CONFIGURE_IN_N8N" (placeholder)
+  - В orchestrator.json и 10-format-document.json: id/name е "CONFIGURE_IN_N8N" (placeholder)
 
 Native LLM Node:
   - type: "@n8n/n8n-nodes-langchain.lmChatOpenRouter"
@@ -198,6 +234,7 @@ Models:
   - Writing/Extraction: "anthropic/claude-sonnet-4" (maxTokens: 16000, temp: 0.2-0.3)
   - Validation: "anthropic/claude-opus-4" (maxTokens: 4000, temp: 0.1)
   - Finalization (BYPASSED): "anthropic/claude-opus-4" (maxTokens: 64000, temp: 0.15)
+  - Formatting (WF10): "anthropic/claude-sonnet-4" (maxTokens: 16000, temp: 0.15)
 
 n8n Instance:
   - URL: https://n8n.simeontsvetanovn8nworkflows.site
@@ -348,6 +385,7 @@ e:\VISUAL STUDIO\TEHNICHESKO PREDLOJENIE\
 │       ├── 06-validate-section.json # AI: validate section quality
 │       ├── 07-finalize-document.json # AI: final editing (⚠️ BYPASSED)
 │       ├── 09-status-api.json      # Status/preview/download API
+│       ├── 10-format-document.json # Document formatter (standalone)
 │       └── SETUP.md                # Setup instructions
 ├── general_instructions.txt  # Global AI assistant instructions
 ├── github_mcp_README.md      # n8n-specific instructions
