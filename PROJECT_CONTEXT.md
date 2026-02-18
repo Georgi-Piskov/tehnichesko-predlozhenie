@@ -293,11 +293,14 @@ b8a575d  fix: add retryOnFail + error resilience for transient API errors
 d9cba6c  fix: frontend stuck on planning - add writing status + increase poll timeout
 689b110  fix: handle 'not_found' status gracefully + fix Status:Init timing
 818e350  feat: save generated document to Google Drive as Google Doc
+815bf75  docs: update PROJECT_CONTEXT.md with full project state (Feb 16)
+9aed98b  feat: add WF10 - Format Document workflow (standalone Markdown→HTML→Google Doc)
+85ee7c5  fix: use n8n getBinaryDataBuffer helper for binary read in WF10
 ```
 
 ---
 
-## 8. ТЕКУЩ СТАТУС НА ПРОЕКТА (16.02.2026)
+## 8. ТЕКУЩ СТАТУС НА ПРОЕКТА (18.02.2026)
 
 ### ✅ Готово:
 - Пълен pipeline: Extract → Requirements → Analyze → Plan → Write (per-section) → Validate → Assemble
@@ -314,27 +317,32 @@ d9cba6c  fix: frontend stuck on planning - add writing status + increase poll ti
 - Save to Google Drive като нативен Google Doc
 - WF06 auto-pass при crash (onError: continueRegularOutput)
 - Finalize Document bypassed (спестява $5+/run и 10-20 мин)
+- WF10 Format Document: създаден (Manual Trigger → Download → Split → AI Format → Upload)
 
 ### ⚠️ НЕ Е ТЕСТВАНО / НЕИЗВЕСТНО:
 - **Пълен end-to-end тест НЕ Е ЗАВЪРШЕН УСПЕШНО**
-- Последните sessions бяха фокусирани върху fix-ове и подготовка
 - Google Drive credential НЕ Е конфигуриран — трябва ръчно в n8n
-- "Заявка не е намерена" може да продължава ако Status API workflow не е ACTIVATED
+
+### 🐛 WF10 Format Document — BUG (18.02.2026):
+- **Симптом**: Всички 26 секции показват "⚠️ Грешка при форматиране на секция X" (червен текст)
+- **Означава**: chainLlm "Format Section" node гърми за ВСЯКА секция
+- **`onError: continueRegularOutput`** хваща грешката → Accumulate записва error HTML fallback
+- **Вероятни причини (за дебъг следващата сесия)**:
+  1. **chainLlm получава празен prompt** — провери output на "Prep Format Prompt" node
+  2. **SplitInBatches connections** — output 0 (item) трябва да отива към Prep Format, output 1 (done) към Assemble
+  3. **Model connection** — провери дали Claude Sonnet е свързан с ai_languageModel port на Format Section
+  4. **OpenRouter credential** — може credential да не работи (rate limit, expired)
+  5. **Prompt е твърде дълъг** — секциите може да надвишават context window
+- **Как да дебъгнеш**: В n8n отвори execution → кликни на "Format Section" node → виж Error details в output
+- **Binary read е ПОПРАВЕН** (commit 85ee7c5) — вече използва `this.helpers.getBinaryDataBuffer()`
 
 ### 🔲 TODO за следващата сесия:
-1. **Импортирай orchestrator** (`00-orchestrator.json`) в n8n
-2. **Конфигурирай Google Drive credential** в "Save to Google Drive" node-а
-3. **Увери се, че ВСИЧКИ workflows са ACTIVATED** (особено TP-Status API!)
-4. **Пусни пълен end-to-end тест** и следи в:
-   - Frontend: Step 3 прогрес
-   - n8n: Executions log за грешки
-   - Google Drive: генериран ли е документ?
-5. **Ако тестът е успешен** → проверки:
-   - Preview бутон работи ли?
-   - Download дава ли .md файл?
-   - Google Doc съдържа ли пълния текст?
-   - Stats (страници, секции) правилни ли са?
-6. **Ако гърмне** → запиши error message и кой node е fail-нал
+1. **Дебъгни WF10**: Отвори failed execution → виж error на "Format Section" node
+2. **Провери connections**: SplitInBatches output 0 → Prep Format → Format Section → Accumulate → back to Loop; output 1 → Assemble
+3. **Провери model link**: Claude Sonnet → ai_languageModel → Format Section
+4. **Тествай с 1 секция**: Промени Split into Sections да върне само 1 секция за бърз тест
+5. **Ако WF10 работи** → тествай с пълен документ
+6. **Основен pipeline** (WF00): Все още не е тестван end-to-end
 
 ---
 
@@ -349,6 +357,7 @@ d9cba6c  fix: frontend stuck on planning - add writing status + increase poll ti
 | 5 | CORS preflight (OPTIONS) | Unknown | n8n може да не хендълва OPTIONS. Ако frontend не достига n8n, може да е това |
 | 6 | Prompt files не са синхронизирани | Known | `n8n/prompts/*.md` са от по-ранна итерация, не отразяват текущите inline prompts |
 | 7 | placeholderCount не се агрегира | Known | Pipeline Complete не брои `[⚠️ ПОПЪЛНЕТЕ:]` patterns |
+| 8 | WF10: chainLlm гърми за всички секции | **Active BUG** | Всички 26 секции → error fallback HTML. Виж секция 8 за дебъг стъпки |
 
 ---
 
