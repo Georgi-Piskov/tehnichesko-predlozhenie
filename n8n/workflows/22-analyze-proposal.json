@@ -1,0 +1,97 @@
+{
+  "name": "Eval - Analyze Proposal",
+  "nodes": [
+    {
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "position": [0, 300],
+      "webhookId": "eval-analyze-proposal",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "eval-analyze-proposal",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "prep",
+      "name": "Prepare Data",
+      "type": "n8n-nodes-base.code",
+      "position": [260, 300],
+      "parameters": {
+        "jsCode": "var body = $json.body || $json;\nvar propText = body.proposalText || body.fullText || '';\nif (propText.length > 120000) propText = propText.substring(0, 120000);\nreturn [{ json: { proposalText: propText } }];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "llm",
+      "name": "Analyze Proposal",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "position": [520, 300],
+      "parameters": {
+        "text": "=Ти си експерт-рецензент на технически предложения за обществени поръчки.\n\n## ЗАДАЧА\nАнализирай техническото предложение на кандидата и извлечи ВСИЧКО заявено, предложено или твърдяно.\n\n## КАКВО ДА ИЗВЛЕЧЕШ\n\n### 1. ОБЩА ИНФОРМАЦИЯ\n- Име на кандидата (ако е видимо)\n- Предмет на поръчката (как го описва кандидатът)\n- Обем на предложението (приблизителен брой страници)\n- Обща структура и съдържание\n\n### 2. ЗА ВСЯКА СЕКЦИЯ НА ПРЕДЛОЖЕНИЕТО:\n- Заглавие на секцията\n- Резюме на съдържанието (2-3 изречения)\n- Конкретни твърдения и ангажименти (ДОСЛОВНИ ЦИТАТИ)\n- Дали е конкретно за поръчката или generic/шаблонно\n- Дали има доказателства или само декларативни текстове\n\n### 3. ПРЕДЛОЖЕН ПОДХОД/МЕТОДОЛОГИЯ\n- Описан ли е? Конкретно или generic?\n- Специфичен ли е за тази поръчка?\n- Ключови точки\n\n### 4. ЕКИП\n- Предложени специалисти (имена, квалификация)\n- Сертификати/лицензи споменати\n- Опит (конкретен или общ)\n\n### 5. ОБОРУДВАНЕ И РЕСУРСИ\n- Конкретно оборудване (марки, модели)\n- Собствено или наето\n- Достатъчно ли е за описания обем\n\n### 6. СРОКОВЕ\n- Предложен общ срок\n- Етапи/график\n- Междинни срокове\n\n### 7. ТАБЛИЦИ И КОЛИЧЕСТВЕНИ ДАННИ\n- Какви таблици съдържа\n- Попълнени ли са с конкретни данни\n\n### 8. ЧЕРВЕНИ ФЛАГОВЕ\n- Неясни/размити формулировки\n- Copy-paste от документацията (без собствен принос)\n- Вътрешни противоречия\n- Нереалистични обещания\n- Липсващи секции, подписи, дати\n- Generic текст, приложим за всяка поръчка\n\n## КРИТИЧНИ ПРАВИЛА\n- Извличай САМО от предложението — НИЩО измислено\n- Цитирай ДОСЛОВНО когато е важно\n- Бъди обективен — не добавяй оценки, само факти\n- НЕ пропускай нищо — всяко твърдение на кандидата има значение\n- Ако нещо липсва в предложението → отбележи го явно\n\n## ФОРМАТ\nВърни САМО валиден JSON (без markdown блокове):\n{\n  \"candidate_name\": \"или null\",\n  \"proposal_subject\": \"как кандидатът описва предмета\",\n  \"total_pages_approx\": null,\n  \"structure_overview\": \"кратко описание на структурата\",\n  \"sections\": [\n    {\n      \"title\": \"Заглавие на секцията\",\n      \"summary\": \"кратко резюме 2-3 изречения\",\n      \"specific_claims\": [\"ДОСЛОВНИ ЦИТАТИ на конкретни твърдения/ангажименти\"],\n      \"evidence_provided\": [\"конкретни доказателства, документи, референции\"],\n      \"is_generic\": false,\n      \"completeness\": \"complete|incomplete|empty\"\n    }\n  ],\n  \"methodology\": {\n    \"described\": true,\n    \"is_specific_to_procurement\": true,\n    \"key_points\": [\"...\"]\n  },\n  \"team\": [\n    {\n      \"role\": \"роля\",\n      \"name\": \"или null\",\n      \"qualifications\": \"описание\",\n      \"certifications\": [\"...\"],\n      \"experience_description\": \"описание\"\n    }\n  ],\n  \"equipment\": [\n    {\n      \"type\": \"вид\",\n      \"details\": \"описание\",\n      \"ownership\": \"own|rented|unspecified\"\n    }\n  ],\n  \"timeline\": {\n    \"total_duration\": \"или null\",\n    \"phases\": [{\"name\": \"\", \"duration\": \"\"}]\n  },\n  \"tables_present\": [\"описание на таблиците\"],\n  \"red_flags\": [\n    {\n      \"type\": \"vague|copy_paste|contradiction|unrealistic|missing_info|generic|other\",\n      \"description\": \"описание на проблема\",\n      \"location\": \"къде в предложението\"\n    }\n  ],\n  \"extraction_confidence\": \"HIGH|MEDIUM|LOW\"\n}\n\nТЕХНИЧЕСКО ПРЕДЛОЖЕНИЕ НА КАНДИДАТА:\n{{ $json.proposalText }}",
+        "promptType": "define",
+        "messages": {
+          "messageValues": [
+            {
+              "type": "system",
+              "message": "You are an expert reviewer of technical proposals for Bulgarian public procurement. Your role is to EXTRACT and CATALOG everything the candidate has stated, claimed, or proposed.\n\nCRITICAL RULES:\n1. Extract ONLY facts present in the proposal text — NEVER invent content\n2. Quote VERBATIM when citing specific claims\n3. Be OBJECTIVE — do not evaluate, only extract and catalog\n4. Note EVERY claim, commitment, and piece of evidence\n5. Flag genuinely generic/template text that is not specific to the procurement\n6. If information is missing from the proposal, explicitly note it\n7. Output ONLY valid JSON, no markdown blocks, no explanations\nLanguage: Bulgarian for content, English for JSON keys."
+            }
+          ]
+        }
+      },
+      "typeVersion": 1.4
+    },
+    {
+      "id": "model",
+      "name": "Claude Sonnet",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "position": [440, 520],
+      "parameters": {
+        "model": "anthropic/claude-sonnet-4",
+        "options": {
+          "maxTokens": 16000,
+          "temperature": 0.15
+        }
+      },
+      "credentials": {
+        "openRouterApi": {
+          "id": "UjrrZkDAIpdRXbb8",
+          "name": "GP-Open_Router_Test"
+        }
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "parse",
+      "name": "Parse Proposal Data",
+      "type": "n8n-nodes-base.code",
+      "position": [780, 300],
+      "parameters": {
+        "jsCode": "const raw = ($json.text || $json.response || '').trim();\nlet result;\n\ntry {\n  result = JSON.parse(raw);\n} catch (e) {\n  const m = raw.match(/```(?:json)?\\s*([\\s\\S]*?)```/);\n  const candidate = m ? m[1].trim() : raw;\n  try {\n    const s = candidate.indexOf('{');\n    const e2 = candidate.lastIndexOf('}');\n    let jsonStr = candidate.substring(s, e2 + 1);\n    jsonStr = jsonStr.replace(/,\\s*([\\]\\}])/g, '$1');\n    result = JSON.parse(jsonStr);\n  } catch (e3) {\n    result = {\n      candidate_name: 'Parse error',\n      sections: [],\n      _parse_error: 'JSON parse failed',\n      _raw: raw.substring(0, 2000)\n    };\n  }\n}\n\nreturn [{ json: { proposalAnalysis: result } }];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "respond",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [1040, 300],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}"
+      },
+      "typeVersion": 1.1
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [[{ "node": "Prepare Data", "type": "main", "index": 0 }]] },
+    "Prepare Data": { "main": [[{ "node": "Analyze Proposal", "type": "main", "index": 0 }]] },
+    "Claude Sonnet": { "ai_languageModel": [[{ "node": "Analyze Proposal", "type": "ai_languageModel", "index": 0 }]] },
+    "Analyze Proposal": { "main": [[{ "node": "Parse Proposal Data", "type": "main", "index": 0 }]] },
+    "Parse Proposal Data": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

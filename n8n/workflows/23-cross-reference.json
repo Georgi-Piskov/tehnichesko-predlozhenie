@@ -1,0 +1,97 @@
+{
+  "name": "Eval - Cross-Reference",
+  "nodes": [
+    {
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "position": [0, 300],
+      "webhookId": "eval-cross-reference",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "eval-cross-reference",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "prep",
+      "name": "Prepare Cross-Reference Prompt",
+      "type": "n8n-nodes-base.code",
+      "position": [260, 300],
+      "parameters": {
+        "jsCode": "var body = $json.body || $json;\nvar requirement = body.requirement || {};\nvar proposalAnalysis = body.proposalAnalysis || {};\nvar proposalText = (body.proposalText || '').substring(0, 50000);\nvar reqStr = JSON.stringify(requirement, null, 2).substring(0, 5000);\nvar analysisStr = JSON.stringify(proposalAnalysis, null, 2).substring(0, 25000);\n\nvar p = 'Ти си одитор на обществени поръчки. Проверяваш дали техническото предложение на кандидата покрива ЕДНО КОНКРЕТНО изискване от документацията на възложителя.\\n\\n';\np += '## ИЗИСКВАНЕ ЗА ПРОВЕРКА:\\n' + reqStr + '\\n\\n';\np += '## СТРУКТУРИРАН АНАЛИЗ НА ПРЕДЛОЖЕНИЕТО НА КАНДИДАТА:\\n' + analysisStr + '\\n\\n';\np += '## СУРОВ ТЕКСТ НА ПРЕДЛОЖЕНИЕТО (за верификация):\\n' + proposalText + '\\n\\n';\np += '## СТЪПКИ НА ПРОВЕРКА:\\n';\np += '1. НАЛИЧИЕ: Адресирано ли е изискването в предложението? Къде точно?\\n';\np += '2. ПЪЛНОТА: Покрити ли са ВСИЧКИ подточки/подизисквания?\\n';\np += '3. АДЕКВАТНОСТ: Достатъчно конкретен и адекватен ли е отговорът?\\n';\np += '4. ДОКАЗАТЕЛСТВА: Представени ли са доказателства (сертификати, опит, документи)?\\n';\np += '5. СЪОТВЕТСТВИЕ: Има ли противоречия с изискванията или вътрешни противоречия?\\n';\np += '6. СПЕЦИФИЧНОСТ: Специфичен ли е за тази поръчка или е generic шаблонен текст?\\n\\n';\np += '## СТАТУСИ:\\n';\np += '- COMPLIANT: Покрито напълно и адекватно\\n';\np += '- PARTIALLY_COMPLIANT: Адресирано, но с пропуски или недостатъци\\n';\np += '- NON_COMPLIANT: Адресирано, но НЕ отговаря на изискването\\n';\np += '- MISSING: Изобщо НЕ е адресирано в предложението\\n\\n';\np += '## КРИТИЧНИ ПРАВИЛА:\\n';\np += '- Бъди ОБЕКТИВЕН — не търси проблеми които ги няма\\n';\np += '- Цитирай КОНКРЕТЕН текст от предложението (exact quotes)\\n';\np += '- Цитирай КОНКРЕТЕН текст от изискването\\n';\np += '- За PARTIALLY/NON_COMPLIANT: обясни ТОЧНО какво липсва\\n';\np += '- За MISSING: потвърди че си проверил ЦЕЛИЯ документ\\n';\np += '- НЕ СЕ ПРОИЗНАСЯЙ по неща извън проверяваното изискване\\n';\np += '- НЕ приемай generic текст за валидно покритие на специфично изискване\\n\\n';\np += '## ФОРМАТ\\n';\np += 'Върни САМО валиден JSON (без markdown блокове):\\n';\np += '{\\n';\np += '  \"requirement_id\": \"R1\",\\n';\np += '  \"requirement_title\": \"заглавие\",\\n';\np += '  \"status\": \"COMPLIANT|PARTIALLY_COMPLIANT|NON_COMPLIANT|MISSING\",\\n';\np += '  \"analysis\": \"Подробен анализ 3-5 изречения\",\\n';\np += '  \"proposal_citations\": [\"Дословни цитати от предложението\"],\\n';\np += '  \"requirement_citations\": [\"Дословни цитати от изискването\"],\\n';\np += '  \"deficiencies\": [\\n';\np += '    {\\n';\np += '      \"description\": \"Какво точно липсва или не отговаря\",\\n';\np += '      \"severity\": \"CRITICAL|MAJOR|MINOR\",\\n';\np += '      \"sub_requirement_id\": \"R1.1 или null\"\\n';\np += '    }\\n';\np += '  ],\\n';\np += '  \"score\": 85,\\n';\np += '  \"notes\": \"Допълнителни бележки\"\\n';\np += '}';\n\nreturn [{ json: { prompt: p } }];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "llm",
+      "name": "Cross-Reference",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "position": [520, 300],
+      "parameters": {
+        "text": "={{ $json.prompt }}",
+        "promptType": "define",
+        "messages": {
+          "messageValues": [
+            {
+              "type": "system",
+              "message": "You are a strict but fair public procurement auditor for Bulgarian procurements. You check ONE specific requirement at a time against a candidate's technical proposal.\n\nCRITICAL RULES:\n1. Be OBJECTIVE — do not invent problems where none exist\n2. Quote SPECIFIC text from both the requirement and the proposal\n3. Generic/template text does NOT satisfy specific requirements\n4. A missing requirement is only MISSING if you verified the ENTIRE proposal\n5. If the requirement is adequately covered, mark as COMPLIANT — do not nitpick\n6. For PARTIALLY_COMPLIANT or NON_COMPLIANT, explain EXACTLY what is missing\n7. Do NOT evaluate aspects outside the specific requirement being checked\n8. Output ONLY valid JSON, no markdown blocks\nLanguage: Bulgarian for content, English for JSON keys."
+            }
+          ]
+        }
+      },
+      "typeVersion": 1.4
+    },
+    {
+      "id": "model",
+      "name": "Claude Sonnet",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "position": [440, 520],
+      "parameters": {
+        "model": "anthropic/claude-sonnet-4",
+        "options": {
+          "maxTokens": 8000,
+          "temperature": 0.1
+        }
+      },
+      "credentials": {
+        "openRouterApi": {
+          "id": "UjrrZkDAIpdRXbb8",
+          "name": "GP-Open_Router_Test"
+        }
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "parse",
+      "name": "Parse Finding",
+      "type": "n8n-nodes-base.code",
+      "position": [780, 300],
+      "parameters": {
+        "jsCode": "var raw = ($json.text || $json.response || '').trim();\nvar result;\n\ntry {\n  result = JSON.parse(raw);\n} catch (e) {\n  var m = raw.match(/```(?:json)?\\s*([\\s\\S]*?)```/);\n  var candidate = m ? m[1].trim() : raw;\n  try {\n    var s = candidate.indexOf('{');\n    var e2 = candidate.lastIndexOf('}');\n    var js = candidate.substring(s, e2 + 1).replace(/,\\s*([\\]\\}])/g, '$1');\n    result = JSON.parse(js);\n  } catch (e3) {\n    result = {\n      requirement_id: 'UNKNOWN',\n      status: 'COMPLIANT',\n      analysis: 'Parse error — defaulting to COMPLIANT to avoid false positives',\n      deficiencies: [],\n      score: 70,\n      _parse_error: true\n    };\n  }\n}\n\n// Validate status\nvar validStatuses = ['COMPLIANT', 'PARTIALLY_COMPLIANT', 'NON_COMPLIANT', 'MISSING'];\nif (validStatuses.indexOf(result.status) === -1) {\n  result.status = result.score >= 80 ? 'COMPLIANT' : 'PARTIALLY_COMPLIANT';\n}\n\nreturn [{ json: { finding: result } }];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "respond",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [1040, 300],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}"
+      },
+      "typeVersion": 1.1
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [[{ "node": "Prepare Cross-Reference Prompt", "type": "main", "index": 0 }]] },
+    "Prepare Cross-Reference Prompt": { "main": [[{ "node": "Cross-Reference", "type": "main", "index": 0 }]] },
+    "Claude Sonnet": { "ai_languageModel": [[{ "node": "Cross-Reference", "type": "ai_languageModel", "index": 0 }]] },
+    "Cross-Reference": { "main": [[{ "node": "Parse Finding", "type": "main", "index": 0 }]] },
+    "Parse Finding": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Оценка на Технически Предложения</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+    <style>
+        /* Eval-specific styles */
+        .recommendation-badge {
+            display: inline-block;
+            padding: 0.5rem 1.25rem;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 1.1rem;
+            text-transform: uppercase;
+        }
+        .rec-disqualify {
+            background: #fef2f2;
+            color: var(--danger);
+            border: 2px solid var(--danger);
+        }
+        .rec-remarks {
+            background: #fef3c7;
+            color: #92400e;
+            border: 2px solid var(--warning);
+        }
+        .rec-accept {
+            background: #f0fdf4;
+            color: var(--success);
+            border: 2px solid var(--success);
+        }
+        .stat-card {
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            flex: 1;
+            min-width: 120px;
+            text-align: center;
+        }
+        .stat-card .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+        .stat-card .stat-label {
+            font-size: 0.8rem;
+            color: var(--text-light);
+        }
+        .recommendation-section {
+            text-align: center;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            background: var(--bg);
+            border-radius: var(--radius);
+        }
+        .recommendation-section .rec-title {
+            font-size: 0.9rem;
+            color: var(--text-light);
+            margin-bottom: 0.5rem;
+        }
+        .nav-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--text-light);
+            text-decoration: none;
+            font-size: 0.85rem;
+            margin-bottom: 1rem;
+        }
+        .nav-link:hover {
+            color: var(--primary);
+        }
+    </style>
+</head>
+<body>
+    <div class="toast-container" id="toastContainer"></div>
+
+    <div class="app-container">
+        <!-- Navigation -->
+        <a href="app.html" class="nav-link">← Генератор на технически предложения</a>
+
+        <!-- Header -->
+        <header class="app-header">
+            <h1>🔍 Оценка на Технически Предложения</h1>
+            <p>Проверка за съответствие и основания за отстраняване по ЗОП</p>
+        </header>
+
+        <!-- Steps Indicator -->
+        <div class="steps-indicator" id="stepsIndicator">
+            <div class="step-item active" data-step="1">
+                <span class="step-number">1</span>
+                <span class="step-label">Документи</span>
+            </div>
+            <div class="step-item" data-step="2">
+                <span class="step-number">2</span>
+                <span class="step-label">Анализ</span>
+            </div>
+            <div class="step-item" data-step="3">
+                <span class="step-number">3</span>
+                <span class="step-label">Резултат</span>
+            </div>
+        </div>
+
+        <!-- ========== STEP 1: Document Upload ========== -->
+        <div class="section-panel active" id="step1">
+            <!-- Requirements Documentation -->
+            <div class="card">
+                <h2 class="card-title"><span class="icon">📋</span> Документация на възложителя (изисквания)</h2>
+                <p class="form-hint" style="margin-bottom: 1rem;">
+                    Качете документацията с изискванията — условия за участие, методика за оценка, техническа спецификация.
+                    Системата ще извлече всички задължителни и оценяеми изисквания.
+                </p>
+                <div class="file-upload-zone" id="reqUploadZone">
+                    <div class="upload-icon">📁</div>
+                    <div class="upload-text">
+                        <strong>Натиснете или плъзнете файл тук</strong><br>
+                        PDF или DOCX, до 50MB
+                    </div>
+                    <input type="file" id="reqFile" accept=".pdf,.docx,.doc">
+                </div>
+                <div id="reqFileInfo" style="display:none;"></div>
+            </div>
+
+            <!-- Candidate's Proposal -->
+            <div class="card">
+                <h2 class="card-title"><span class="icon">📄</span> Техническо предложение на кандидата</h2>
+                <p class="form-hint" style="margin-bottom: 1rem;">
+                    Качете техническото предложение, което искате да проверите за съответствие с изискванията.
+                </p>
+                <div class="file-upload-zone" id="propUploadZone">
+                    <div class="upload-icon">📁</div>
+                    <div class="upload-text">
+                        <strong>Натиснете или плъзнете файл тук</strong><br>
+                        PDF или DOCX, до 50MB
+                    </div>
+                    <input type="file" id="propFile" accept=".pdf,.docx,.doc">
+                </div>
+                <div id="propFileInfo" style="display:none;"></div>
+            </div>
+
+            <!-- Evaluation Notes -->
+            <div class="card">
+                <h2 class="card-title"><span class="icon">💡</span> Допълнителни указания (опционално)</h2>
+                <div class="form-group">
+                    <label class="form-label">Бележки за оценката</label>
+                    <textarea class="form-textarea" id="evaluationNotes" rows="4"
+                        placeholder="Специфични аспекти за проверка, известни проблеми, фокус на анализа..."></textarea>
+                    <span class="form-hint">Опционално. Ще помогне на системата да фокусира анализа.</span>
+                </div>
+            </div>
+
+            <div class="btn-group" style="justify-content: flex-end;">
+                <button class="btn btn-primary btn-lg" onclick="startEvaluation()">
+                    🔍 Стартирай оценка
+                </button>
+            </div>
+        </div>
+
+        <!-- ========== STEP 2: Progress ========== -->
+        <div class="section-panel" id="step2">
+            <div class="card">
+                <h2 class="card-title"><span class="icon">⚙️</span> Анализ на техническото предложение</h2>
+
+                <div class="progress-bar-wrapper">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+
+                <p id="progressText" style="text-align: center; margin-bottom: 1.5rem; font-weight: 500;">
+                    Стартиране...
+                </p>
+
+                <div class="progress-phases" id="progressPhases">
+                    <div class="phase-item" data-phase="upload">
+                        <span class="phase-icon">⏳</span>
+                        <span>Качване и обработка на файлове</span>
+                    </div>
+                    <div class="phase-item" data-phase="extract">
+                        <span class="phase-icon">⏳</span>
+                        <span>Извличане на изисквания от документацията</span>
+                    </div>
+                    <div class="phase-item" data-phase="analyze">
+                        <span class="phase-icon">⏳</span>
+                        <span>Анализ на техническото предложение</span>
+                    </div>
+                    <div class="phase-item" data-phase="crossref">
+                        <span class="phase-icon">⏳</span>
+                        <span>Кръстосана проверка по изисквания (0/0)</span>
+                    </div>
+                    <div class="phase-item" data-phase="legal">
+                        <span class="phase-icon">⏳</span>
+                        <span>Юридическа валидация (Claude Opus)</span>
+                    </div>
+                    <div class="phase-item" data-phase="report">
+                        <span class="phase-icon">⏳</span>
+                        <span>Генериране на протокол</span>
+                    </div>
+                    <div class="phase-item" data-phase="export">
+                        <span class="phase-icon">⏳</span>
+                        <span>Запазване на резултата</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== STEP 3: Result ========== -->
+        <div class="section-panel" id="step3">
+            <!-- Recommendation -->
+            <div class="card">
+                <h2 class="card-title"><span class="icon">⚖️</span> Резултат от оценката</h2>
+
+                <div class="recommendation-section">
+                    <div class="rec-title">ПРЕПОРЪКА НА КОМИСИЯТА</div>
+                    <span id="statRecommendation" class="recommendation-badge">—</span>
+                </div>
+
+                <!-- Stats -->
+                <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
+                    <div class="stat-card" style="background: var(--primary-light);">
+                        <div class="stat-value" style="color: var(--primary);" id="statTotal">0</div>
+                        <div class="stat-label">Проверени изисквания</div>
+                    </div>
+                    <div class="stat-card" style="background: #f0fdf4;">
+                        <div class="stat-value" style="color: var(--success);" id="statCompliant">0</div>
+                        <div class="stat-label">Съответстващи</div>
+                    </div>
+                    <div class="stat-card" style="background: #fef3c7;">
+                        <div class="stat-value" style="color: #92400e;" id="statPartial">0</div>
+                        <div class="stat-label">Частично</div>
+                    </div>
+                    <div class="stat-card" style="background: #fef2f2;">
+                        <div class="stat-value" style="color: var(--danger);" id="statNonCompliant">0</div>
+                        <div class="stat-label">Несъответстващи</div>
+                    </div>
+                    <div class="stat-card" style="background: #fef2f2; border: 2px solid var(--danger);">
+                        <div class="stat-value" style="color: var(--danger);" id="statDisqualify">0</div>
+                        <div class="stat-label">Основания за отстраняване</div>
+                    </div>
+                </div>
+
+                <div class="download-actions">
+                    <button class="btn btn-success btn-lg" onclick="downloadResult()">
+                        📥 Изтегли протокол
+                    </button>
+                    <button class="btn btn-secondary" onclick="togglePreview()">
+                        👁️ Преглед
+                    </button>
+                    <button class="btn btn-secondary" onclick="goToStep(1)">
+                        🔄 Нова оценка
+                    </button>
+                </div>
+            </div>
+
+            <!-- Preview -->
+            <div class="card" id="previewCard" style="display: none;">
+                <h2 class="card-title"><span class="icon">👁️</span> Преглед на протокола</h2>
+                <div class="preview-content" id="previewContent"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/eval-app.js"></script>
+</body>
+</html>

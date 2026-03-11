@@ -1,17 +1,24 @@
 # PROJECT CONTEXT — Технически Предложения Generator
 
 > **ПРОЧЕТИ ТОЗИ ФАЙЛ ПЪРВО при нова сесия, за да хванеш пълния контекст на проекта.**
-> Последна актуализация: 16.02.2026, commit `818e350`
+> Последна актуализация: 17.02.2026
 
 ---
 
 ## 1. КАКВО Е ПРОЕКТЪТ
 
-Система за автоматично генериране на **технически предложения за обществени поръчки** (България).
+Система за автоматично генериране на **технически предложения за обществени поръчки** (България) + **оценка на технически предложения** от гледна точка на възложител.
 
+### Pipeline 1 — Генератор
 - **Потребителят** качва PDF документация + техническа спецификация
 - **AI pipeline** извлича изисквания, анализира, планира, пише секция по секция, валидира
 - **Изход**: готов документ (~30-50 страници) — запазва се като Google Doc в Google Drive + .md download
+
+### Pipeline 2 — Оценка (НОВА)
+- **Потребителят** качва документация на възложителя + техническо предложение на кандидата
+- **AI pipeline** извлича изисквания, анализира предложението, кръстосано сравнява, правна валидация
+- **Изход**: протокол от оценка с основания за отстраняване/допускане — запазва се като Google Doc + .md download
+- **Правна обосновка**: чл. 107 ЗОП (отстраняване), чл. 104 ал. 5 (разяснения), чл. 104 ал. 7 (нередовности)
 
 **Основно изискване от потребителя:**
 > "Работата изискява много точност и никаква възможност за грешки."
@@ -25,8 +32,10 @@
 ```
 Frontend (GitHub Pages)          n8n Instance (v2.0.2)              OpenRouter API
   app.html + JS files     →    Orchestrator (WF00)           →    Claude Sonnet 4
-                           →    Sub-workflows (WF02-06)       →    Claude Opus 4 (validator)
-                           →    Status API (WF09)
+  eval.html + JS files    →    Eval Orchestrator (WF20)      →    Claude Opus 4 (legal)
+                           →    Sub-workflows (WF02-06)       →    (Generation pipeline)
+                           →    Eval Sub-workflows (WF21-25)  →    (Evaluation pipeline)
+                           →    Status API (WF09)             →    (shared)
                            →    Google Drive (save output)
 ```
 
@@ -34,10 +43,11 @@ Frontend (GitHub Pages)          n8n Instance (v2.0.2)              OpenRouter A
 
 | Компонент | Описание |
 |-----------|----------|
-| **Frontend** | GitHub Pages: `app.html`, `js/api.js`, `js/app.js`, `js/fileUpload.js`, `css/styles.css` |
+| **Frontend — Генератор** | GitHub Pages: `app.html`, `js/api.js`, `js/app.js`, `js/fileUpload.js`, `css/styles.css` |
+| **Frontend — Оценка** | GitHub Pages: `eval.html`, `js/eval-app.js`, `css/styles.css` (reused) |
 | **n8n** | v2.0.2 на `https://n8n.simeontsvetanovn8nworkflows.site` |
-| **AI Models** | OpenRouter: Claude Sonnet 4 (писане), Claude Opus 4 (валидация) |
-| **Google Drive** | Запазва генерирания документ като нативен Google Doc |
+| **AI Models** | OpenRouter: Claude Sonnet 4 (писане/анализ), Claude Opus 4 (валидация/правна) |
+| **Google Drive** | Запазва генерирания документ/протокол като нативен Google Doc |
 | **GitHub Repo** | `Georgi-Piskov/tehnichesko-predlozhenie` (public) |
 
 ---
@@ -174,6 +184,100 @@ Manual Trigger → Config (Set: fileId, outputName, folderId)
 
 ---
 
+### 🔍 EVALUATION PIPELINE (WF20-25) — НОВА
+
+### WF20 — Eval Orchestrator (`20-eval-orchestrator.json`)
+**Главен pipeline за оценка.** Приема файлове от eval frontend, координира всички eval под-workflows.
+
+**Pipeline flow:**
+```
+Webhook POST /eval-generate
+  → Init Job (parse FormData, generate eval_jobId)
+  → [Send Response (jobId + CORS) | Status: Init]    ← ПАРАЛЕЛНО
+  → Split Binary Files → Extract from PDF → Merge Texts (req vs proposal)
+  → [Extract Requirements (HTTP → WF21) | Status: Extracting Requirements]
+  → After Requirements
+  → [Analyze Proposal (HTTP → WF22) | Status: Analyzing Proposal]
+  → After Proposal Analysis
+  → Flatten Requirements (sections→individual requirements)
+  → Loop Over Items (SplitInBatches, batchSize=1)
+    ↓ per requirement:
+    → [Prep Cross-Ref | Status: Cross-Referencing (per-requirement progress)]
+    → Cross-Reference (HTTP → WF23)
+    → Accumulate Finding (staticData)
+  → Assemble Findings
+  → [Legal Validation (HTTP → WF24, Claude Opus) | Status: Legal Validation]
+  → After Legal
+  → [Generate Report (HTTP → WF25) | Status: Generating Report]
+  → Pipeline Complete
+  → [Status: Complete | Save to Google Drive]    ← ПАРАЛЕЛНО
+```
+
+**Ключови детайли:**
+- Webhook path: `/webhook/eval-generate`
+- JobId prefix: `eval_` (различен от генератора)
+- Merge Texts разделя файловете по sourceField (`requirements` vs `proposal`)
+- WF24 (Legal Validation) получава САМО non-compliant findings (оптимизация на цена)
+- COMPLIANT findings се пропускат за правната валидация
+- `$getWorkflowStaticData('global')` за натрупване на findings между итерации
+- Parse fallback при WF23 грешка: defaults to COMPLIANT (избягва false positives)
+- Реизползва WF09 Status API (същите endpoints)
+- **Приблизителна цена**: ~$8-15 на оценка (15-25 Sonnet calls + 1 Opus call)
+
+### WF21 — Extract Eval Requirements (`21-extract-eval-requirements.json`)
+- Webhook: `/eval-extract-requirements`
+- Pattern: Webhook → Code (Prepare Data) → chainLlm (Claude Sonnet, temp 0.1) → Parse → Respond
+- Извлича ВСИЧКИ изисквания от документацията на възложителя
+- Категоризира: MANDATORY (отстранително по чл. 107 ЗОП), EVALUATIVE (за оценяване), UNCLEAR
+- Извлича: подизисквания, критерии за оценка, необходими доказателства, източник в документацията
+- Truncate: 120K chars
+- maxTokens: 16000
+
+### WF22 — Analyze Proposal (`22-analyze-proposal.json`)
+- Webhook: `/eval-analyze-proposal`
+- Pattern: Webhook → Code (Prepare Data) → chainLlm (Claude Sonnet, temp 0.15) → Parse → Respond
+- Анализира техническото предложение на кандидата
+- Извлича: секции, методология, екип, оборудване, график, таблици
+- Флагове за червени знамена: vague, copy_paste, contradiction, unrealistic, missing_info, generic
+- Truncate: 120K chars
+- maxTokens: 16000
+
+### WF23 — Cross-Reference (`23-cross-reference.json`)
+- Webhook: `/eval-cross-reference`
+- Pattern: Webhook → Code (Prepare Prompt) → chainLlm (Claude Sonnet, temp 0.1) → Parse → Respond
+- Кръстосано сравнява ЕДНО изискване с предложението
+- Input: `{ requirement, proposalAnalysis, proposalText }` — proposalText truncate до 50K chars
+- Output: `{ finding: { requirement_id, status, analysis, proposal_citations, requirement_citations, deficiencies, score } }`
+- Status стойности: COMPLIANT, PARTIALLY_COMPLIANT, NON_COMPLIANT, MISSING
+- Parse fallback: defaults to COMPLIANT при грешка (избягва false positives)
+- maxTokens: 8000
+
+### WF24 — Legal Validation (`24-legal-validation.json`)
+- Webhook: `/eval-legal-validation`
+- Pattern: Webhook → Code (Prepare & Filter) → chainLlm (**Claude Opus**, temp 0.1) → Parse → Respond
+- **КРИТИЧЕН СТЪП** — използва Claude Opus за максимална точност
+- Получава САМО non-compliant findings (COMPLIANT се пропускат)
+- За всяка констатация определя:
+  - Основание за отстраняване (да/не)
+  - Правна основа (конкретни членове от ЗОП/ППЗОП)
+  - Тип нарушение (MANDATORY_REQUIREMENT / EVALUATION_CRITERIA / FORMAL_DEFECT)
+  - Увереност (HIGH/MEDIUM/LOW)
+  - Риск от обжалване пред КЗК (LOW/MEDIUM/HIGH)
+  - Препоръка (DISQUALIFY/REQUEST_CLARIFICATION/REDUCE_POINTS/NO_VIOLATION)
+- **Консервативен подход**: препоръчва отстраняване САМО при ясно и безспорно нарушение
+- При AI грешка: returns ACCEPT_WITH_REMARKS default + бележка за ръчен преглед
+- maxTokens: 16000
+
+### WF25 — Generate Eval Report (`25-generate-eval-report.json`)
+- Webhook: `/eval-generate-report`
+- Pattern: Webhook → Code (Prepare Report Prompt) → chainLlm (Claude Sonnet, temp 0.2) → Parse → Respond
+- Генерира ПРОТОКОЛ ОТ ОЦЕНКА в Markdown
+- Секции: I. Обща информация, II. Обхват, III. Обобщена таблица, IV. Подробен анализ, V. Правна обосновка, VI. Заключение, VII. Рискове при обжалване
+- Включва disclaimer: "подготвен с помощта на AI анализ и подлежи на потвърждение от оценителната комисия"
+- maxTokens: 16000
+
+---
+
 ## 4. FRONTEND АРХИТЕКТУРА
 
 ### `app.html`
@@ -210,6 +314,24 @@ Manual Trigger → Config (Set: fileId, outputName, folderId)
 - Drag & drop + file selection
 - Accepts PDF, DOC, DOCX (max 50MB)
 - `buildFormData()` — appends files + `JSON.stringify(contractorInfo)` as 'contractor'
+
+### `eval.html` — НОВА (Оценка на предложения)
+- 3-стъпков wizard: Документи → Анализ (прогрес) → Резултат
+- Стъпка 1: Две зони за качване — документация на възложителя + предложение на кандидата + бележки
+- Стъпка 2: Прогрес с 7 фази (upload, extract, analyze, crossref, legal, report, export)
+- Стъпка 3: Резултати с recommendation badge (ОТСТРАНЯВАНЕ/ДОПУСКАНЕ С БЕЛЕЖКИ/ДОПУСКАНЕ)
+  - Stats cards: общо, съответстващи, частично, несъответстващи, основания за отстраняване
+  - Download/preview бутони
+- Reuses `css/styles.css` + inline eval-specific стилове
+- Nav link: ← Генератор на технически предложения (app.html)
+
+### `js/eval-app.js` — НОВА (Combined API + file upload + app logic)
+- **EvalAPI**: `submitJob` (POST /webhook/eval-generate), `getJobStatus`, `getPreview`, `downloadReport`
+  - Реизползва WF09 endpoints за status/preview/download
+- **EvalFileUpload**: Две зони (reqFile, propFile), `buildFormData` appends като `requirements` и `proposal`
+- **Phase mapping**: `extracting_requirements→extract`, `analyzing_proposal→analyze`, `cross_referencing→crossref`, `legal_validation→legal`, `generating_report→report`
+- Същият 8-секунден initial poll delay, 90-мин timeout, not_found handling
+- Download filename: `Оценка_ТП_YYYY-MM-DD.md`
 
 ---
 

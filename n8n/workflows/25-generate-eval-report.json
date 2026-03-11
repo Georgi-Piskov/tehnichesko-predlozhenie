@@ -1,0 +1,97 @@
+{
+  "name": "Eval - Generate Report",
+  "nodes": [
+    {
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "position": [0, 300],
+      "webhookId": "eval-generate-report",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "eval-generate-report",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "prep",
+      "name": "Prepare Report Prompt",
+      "type": "n8n-nodes-base.code",
+      "position": [260, 300],
+      "parameters": {
+        "jsCode": "var body = $json.body || $json;\nvar findings = body.findings || [];\nvar legalValidation = body.legalValidation || {};\nvar requirements = body.requirements || {};\nvar proposalAnalysis = body.proposalAnalysis || {};\nvar procurementInfo = body.procurementInfo || {};\n\nvar procStr = JSON.stringify(procurementInfo, null, 2).substring(0, 3000);\nvar reqStr = JSON.stringify(requirements, null, 2).substring(0, 15000);\nvar findingsStr = JSON.stringify(findings, null, 2).substring(0, 20000);\nvar legalStr = JSON.stringify(legalValidation, null, 2).substring(0, 20000);\nvar proposalStr = JSON.stringify(proposalAnalysis, null, 2).substring(0, 10000);\n\n// Count stats\nvar compliant = 0, partial = 0, nonCompliant = 0, missing = 0;\nfor (var i = 0; i < findings.length; i++) {\n  var s = findings[i].status;\n  if (s === 'COMPLIANT') compliant++;\n  else if (s === 'PARTIALLY_COMPLIANT') partial++;\n  else if (s === 'NON_COMPLIANT') nonCompliant++;\n  else if (s === 'MISSING') missing++;\n}\n\nvar overallRec = (legalValidation.overall_recommendation || {}).action || 'НЕПОСОЧЕНО';\n\nvar p = 'Ти си секретар на комисия по обществена поръчка. Изготви ПРОТОКОЛ от проверка на техническо предложение.\\n\\n';\np += '## ДАННИ ЗА ПОРЪЧКАТА:\\n' + procStr + '\\n\\n';\np += '## СТАТИСТИКА:\\n';\np += '- Общо проверени изисквания: ' + findings.length + '\\n';\np += '- Съответстващи (COMPLIANT): ' + compliant + '\\n';\np += '- Частично съответстващи (PARTIALLY_COMPLIANT): ' + partial + '\\n';\np += '- Несъответстващи (NON_COMPLIANT): ' + nonCompliant + '\\n';\np += '- Липсващи (MISSING): ' + missing + '\\n';\np += '- Обща препоръка от юридическия анализ: ' + overallRec + '\\n\\n';\np += '## ИЗВЛЕЧЕНИ ИЗИСКВАНИЯ:\\n' + reqStr + '\\n\\n';\np += '## ИНФОРМАЦИЯ ЗА ПРЕДЛОЖЕНИЕТО:\\n' + proposalStr + '\\n\\n';\np += '## РЕЗУЛТАТИ ОТ КРЪСТОСАНА ПРОВЕРКА:\\n' + findingsStr + '\\n\\n';\np += '## ЮРИДИЧЕСКА ВАЛИДАЦИЯ:\\n' + legalStr + '\\n\\n';\np += '## ФОРМАТ НА ПРОТОКОЛА (Markdown):\\n\\n';\np += '# ПРОТОКОЛ\\n';\np += '## от проверка на техническо предложение\\n';\np += '## по обществена поръчка с предмет: [от данните]\\n\\n';\np += '### I. Обща информация\\n';\np += '- Предмет на поръчката\\n';\np += '- Възложител\\n';\np += '- Кандидат (ако е известен)\\n';\np += '- Дата на проверката (днешна дата)\\n\\n';\np += '### II. Обхват на проверката\\n';\np += '- Общо проверени изисквания\\n';\np += '- Кратко описание на методологията\\n\\n';\np += '### III. Обобщена таблица на резултатите\\n';\np += '| № | Изискване | Тип | Статус | Препоръка |\\n';\np += '|---|-----------|-----|--------|-----------|\\n';\np += '(за ВСЯКО изискване — кратък ред)\\n\\n';\np += '### IV. Подробен анализ на несъответствия\\n';\np += 'За ВСЯКО несъответствие (NON_COMPLIANT, MISSING, PARTIALLY_COMPLIANT):\\n\\n';\np += '#### [N]. [Заглавие на изискването]\\n';\np += '**Изискване от документацията**: [ДОСЛОВЕН цитат]\\n';\np += '**В предложението на кандидата**: [какво е написал / или \"НЕ Е АДРЕСИРАНО\"]\\n';\np += '**Несъответствие**: [описание]\\n';\np += '**Правно основание**: [конкретни членове ЗОП/ППЗОП]\\n';\np += '**Препоръка**: [ОТСТРАНЯВАНЕ / ЗАПИТВАНЕ ЗА РАЗЯСНЕНИЕ / НАМАЛЕНИ ТОЧКИ]\\n\\n';\np += '### V. Правна обосновка\\n';\np += '- Обща юридическа аргументация\\n';\np += '- Приложими нормативни текстове\\n';\np += '- Позоваване на чл. 107, ал. 1 и ал. 2 от ЗОП (ако е приложимо)\\n\\n';\np += '### VI. Заключение и препоръка\\n';\np += '**ПРЕПОРЪКА**: [ясна, еднозначна — ОТСТРАНЯВАНЕ / ДОПУСКАНЕ С БЕЛЕЖКИ / ДОПУСКАНЕ]\\n';\np += 'Мотиви: [кратко обобщение]\\n\\n';\np += '### VII. Рискове при обжалване\\n';\np += '- Оценка на рисковете при евентуално обжалване пред КЗК\\n';\np += '- Препоръки за минимизиране на рисковете\\n\\n';\np += '---\\n';\np += '*Забележка: Настоящият протокол е подготвен с помощта на AI анализ и подлежи на потвърждение от оценителната комисия.*\\n\\n';\np += '## КРИТИЧНИ ПРАВИЛА:\\n';\np += '- Цитирай ДОСЛОВНО от данните — не перифразирай\\n';\np += '- Всяко заключение трябва да има КОНКРЕТНО правно основание\\n';\np += '- Бъди обективен и балансиран\\n';\np += '- Не добавяй констатации извън предоставените данни\\n';\np += '- Протоколът трябва да е годен за официална употреба\\n';\np += '- Пиши на правилен и формален български език';\n\nreturn [{ json: { prompt: p } }];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "llm",
+      "name": "Generate Report",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "position": [520, 300],
+      "parameters": {
+        "text": "={{ $json.prompt }}",
+        "promptType": "define",
+        "messages": {
+          "messageValues": [
+            {
+              "type": "system",
+              "message": "You are a secretary of a public procurement evaluation committee in Bulgaria. You generate formal evaluation PROTOCOLS (протоколи) for reviewing technical proposals.\n\nCRITICAL RULES:\n1. Write in formal Bulgarian legal language\n2. EVERY conclusion must have a specific legal basis (ЗОП/ППЗОП articles)\n3. Quote VERBATIM from the provided data — do not paraphrase or invent\n4. Be objective and balanced — note both compliant and non-compliant findings\n5. The protocol must be suitable for official use in real procurement proceedings\n6. Include the summary table with ALL requirements (not just non-compliant)\n7. For non-compliant findings, provide detailed analysis with exact citations\n8. Do NOT add findings or conclusions beyond what the data supports\n9. Output ONLY the Markdown protocol text, no JSON wrappers\nLanguage: Bulgarian."
+            }
+          ]
+        }
+      },
+      "typeVersion": 1.4
+    },
+    {
+      "id": "model",
+      "name": "Claude Sonnet",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "position": [440, 520],
+      "parameters": {
+        "model": "anthropic/claude-sonnet-4",
+        "options": {
+          "maxTokens": 16000,
+          "temperature": 0.2
+        }
+      },
+      "credentials": {
+        "openRouterApi": {
+          "id": "UjrrZkDAIpdRXbb8",
+          "name": "GP-Open_Router_Test"
+        }
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "format",
+      "name": "Format Output",
+      "type": "n8n-nodes-base.code",
+      "position": [780, 300],
+      "parameters": {
+        "jsCode": "var raw = ($json.text || $json.response || '').trim();\n\n// If the response is wrapped in json/markdown blocks, extract\nvar reportText = raw;\nvar m = raw.match(/```(?:markdown)?\\s*([\\s\\S]*?)```/);\nif (m) reportText = m[1].trim();\n\n// Basic cleanup\nif (!reportText || reportText.length < 100) {\n  reportText = '# ПРОТОКОЛ\\n\\nГрешка при генериране на протокола. Моля, прегледайте данните ръчно.\\n';\n}\n\nreturn [{ json: { reportText: reportText } }];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "respond",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [1040, 300],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}"
+      },
+      "typeVersion": 1.1
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [[{ "node": "Prepare Report Prompt", "type": "main", "index": 0 }]] },
+    "Prepare Report Prompt": { "main": [[{ "node": "Generate Report", "type": "main", "index": 0 }]] },
+    "Claude Sonnet": { "ai_languageModel": [[{ "node": "Generate Report", "type": "ai_languageModel", "index": 0 }]] },
+    "Generate Report": { "main": [[{ "node": "Format Output", "type": "main", "index": 0 }]] },
+    "Format Output": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}
