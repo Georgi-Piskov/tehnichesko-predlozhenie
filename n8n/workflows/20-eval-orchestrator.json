@@ -71,7 +71,7 @@
       "type": "n8n-nodes-base.code",
       "position": [0, 500],
       "parameters": {
-        "jsCode": "var items = $input.all();\nvar splitItems = $('Split Binary Files').all();\nvar reqText = '', propText = '';\nfor (var i = 0; i < items.length; i++) {\n  var text = items[i].json.text || items[i].json.data || '';\n  var sf = (splitItems[i] && splitItems[i].json.sourceField || '').toLowerCase();\n  if (sf === 'requirements' || sf.indexOf('req') >= 0) {\n    reqText += text + '\\n\\n';\n  } else {\n    propText += text + '\\n\\n';\n  }\n}\nreturn [{ json: {\n  requirementsText: reqText.trim(),\n  proposalText: propText.trim(),\n  totalCharacters: (reqText + propText).length\n} }];"
+        "jsCode": "var items = $input.all();\nvar splitItems = $('Split Binary Files').all();\nvar reqText = '', propText = '';\nfor (var i = 0; i < items.length; i++) {\n  var text = items[i].json.text || items[i].json.data || '';\n  var sf = (splitItems[i] && splitItems[i].json.sourceField || '').toLowerCase();\n  if (sf === 'requirements' || sf.indexOf('req') >= 0) {\n    reqText += text + '\\n\\n';\n  } else {\n    propText += text + '\\n\\n';\n  }\n}\nreqText = reqText.replace(/[“”„‟]/g, \"'\");\npropText = propText.replace(/[“”„‟]/g, \"'\");\nreturn [{ json: {\n  requirementsText: reqText.trim(),\n  proposalText: propText.trim(),\n  totalCharacters: (reqText + propText).length\n} }];"
       },
       "typeVersion": 2
     },
