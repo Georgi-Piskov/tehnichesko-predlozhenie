@@ -5,7 +5,10 @@
       "id": "webhook",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
-      "position": [0, 300],
+      "position": [
+        0,
+        300
+      ],
       "webhookId": "tp-write-section",
       "parameters": {
         "httpMethod": "POST",
@@ -19,9 +22,12 @@
       "id": "prep",
       "name": "Prepare Section Prompt",
       "type": "n8n-nodes-base.code",
-      "position": [260, 300],
+      "position": [
+        260,
+        300
+      ],
       "parameters": {
-        "jsCode": "var b = $json.body || $json; var s = b.section;\nvar reqs = b.requirements;\nvar spec = b.specData;\nvar ci = b.contractorInfo;\nvar prev = b.previousContext || '';\nvar fb = b.feedback || '';\nvar pt = b.procurementType || 'неопределен';\nvar idx = b.sectionIndex;\nvar total = b.totalSections;\nvar pages = s.estimated_pages || 5;\n\nvar guide = '';\nif (s.subsections) {\n  for (var sub of s.subsections) {\n    guide += '\\n' + sub.id + '. ' + sub.title + ' (~' + (sub.estimated_pages || 2) + ' стр.)';\n    if (sub.content_guidance) guide += '\\n  Указания: ' + sub.content_guidance.join('; ');\n    if (sub.spec_data_to_use) guide += '\\n  Данни: ' + sub.spec_data_to_use.join('; ');\n    if (sub.tables_needed) {\n      for (var t of sub.tables_needed) {\n        if (t.title) guide += '\\n  Таблица: ' + t.title + (t.columns ? ' (' + t.columns.join(', ') + ')' : '');\n      }\n    }\n  }\n}\n\nvar prompt = 'Напиши САМО секция \"' + s.id + '. ' + s.title + '\" от техническото предложение.\\n';\nprompt += 'Секция ' + (idx + 1) + ' от ' + total + '. Обем: ~' + pages + ' стр. (~' + (pages * 375) + ' думи).\\n\\n';\nprompt += 'ТИП ПОРЪЧКА: ' + pt + '\\n\\n';\nprompt += 'ИЗИСКВАНИЯ ОТ ДОКУМЕНТАЦИЯТА:\\n' + JSON.stringify(reqs, null, 2).substring(0, 12000) + '\\n\\n';\nprompt += 'УКАЗАНИЯ ОТ ПЛАНА:\\n' + (guide || s.title) + '\\n\\n';\nprompt += 'ТЕХНИЧЕСКИ ДАННИ ОТ СПЕЦИФИКАЦИЯТА:\\n' + JSON.stringify(spec, null, 2).substring(0, 12000) + '\\n\\n';\nprompt += 'ИНФОРМАЦИЯ ЗА ИЗПЪЛНИТЕЛЯ:\\n' + JSON.stringify(ci, null, 2) + '\\n\\n';\n\nif (prev) {\n  prompt += 'ПРЕДИШЕН КОНТЕКСТ (НЕ повтаряй, осигури кохерентност):\\n...' + prev.substring(prev.length > 2000 ? prev.length - 2000 : 0) + '\\n\\n';\n}\nif (fb) {\n  prompt += '⚠️ ОБРАТНА ВРЪЗКА ОТ ВАЛИДАЦИЯ — ЗАДЪЛЖИТЕЛНО ПОПРАВИ:\\n' + fb + '\\n\\n';\n}\n\nprompt += 'ПРАВИЛА ЗА ПИСАНЕ:\\n';\nprompt += '1. САМО тази секция — започни с ## ' + s.id + '. ' + s.title + '\\n';\nprompt += '2. За всяка дейност: КАКВО → КАК → С КАКВО → КОЙ → КОНТРОЛ\\n';\nprompt += '3. Markdown таблици за: оборудване, персонал, графици, контролни планове\\n';\nprompt += '4. Графици: представяй като таблици (Дейност | Срок/Месец | Отговорник)\\n';\nprompt += '5. Placeholders [⚠️ ПОПЪЛНЕТЕ: ...] за неизвестна конкретна информация\\n';\nprompt += '6. НЕ измисляй факти, НЕ пиши generic текст приложим за всяка поръчка\\n';\nprompt += '7. Нормативи САМО релевантни за типа поръчка (' + pt + ')\\n';\nprompt += '8. НЕ повтаряй текст от предишните секции\\n';\nprompt += '9. НЕ пиши въведение/заключение на ЦЕЛИЯ документ\\n';\n\nreturn [{ json: { prompt: prompt } }];"
+        "jsCode": "var b = $json.body || $json; var s = b.section;\nvar reqs = b.requirements;\nvar spec = b.specData;\nvar ci = b.contractorInfo;\nvar prev = b.previousContext || '';\nvar fb = b.feedback || '';\nvar pt = b.procurementType || 'неопределен';\nvar idx = b.sectionIndex;\nvar total = b.totalSections;\nvar pages = s.estimated_pages || 5;\nvar headingLevel = (s.parentId || s.parentTitle) ? '###' : '##';\n\nvar guide = '';\nif (s.content_guidance && s.content_guidance.length > 0) {\n  guide = '\\nУказания от плана:\\n';\n  for (var g = 0; g < s.content_guidance.length; g++) {\n    guide += '- ' + s.content_guidance[g] + '\\n';\n  }\n}\nif (s.tables_needed && s.tables_needed.length > 0) {\n  guide += '\\nТаблици за включване:\\n';\n  for (var t = 0; t < s.tables_needed.length; t++) {\n    var tbl = s.tables_needed[t];\n    if (tbl.title) guide += '- ' + tbl.title + (tbl.columns ? ' (' + tbl.columns.join(', ') + ')' : '') + '\\n';\n  }\n}\nif (s.spec_data_to_use && s.spec_data_to_use.length > 0) {\n  guide += '\\nДанни от спецификацията за ползване: ' + s.spec_data_to_use.join(', ') + '\\n';\n}\n\nvar prompt = 'Напиши САМО секция \"' + s.id + '. ' + s.title + '\" от техническото предложение.\\n';\nprompt += 'Секция ' + (idx + 1) + ' от ' + total + '. Обем: ~' + pages + ' стр. (~' + (pages * 375) + ' думи).\\n\\n';\nprompt += 'ТИП ПОРЪЧКА: ' + pt + '\\n\\n';\n\nif (s.requirement_id) {\n  var reqArr = reqs.requirements || reqs;\n  if (Array.isArray(reqArr)) {\n    for (var r = 0; r < reqArr.length; r++) {\n      if (reqArr[r].id === s.requirement_id || reqArr[r].id === s.parentId) {\n        prompt += 'ИЗИСКВАНЕ НА ВЪЗЛОЖИТЕЛЯ (ДОСЛОВНО):\\n' + (reqArr[r].full_text || reqArr[r].title || '') + '\\n\\n';\n        if (reqArr[r].sub_requirements && reqArr[r].sub_requirements.length > 0) {\n          prompt += 'ПОД-ИЗИСКВАНИЯ:\\n';\n          for (var sr = 0; sr < reqArr[r].sub_requirements.length; sr++) {\n            prompt += '- ' + reqArr[r].sub_requirements[sr].id + ': ' + reqArr[r].sub_requirements[sr].text + '\\n';\n          }\n          prompt += '\\n';\n        }\n        break;\n      }\n    }\n  }\n}\n\nprompt += 'УКАЗАНИЯ ОТ ПЛАНА:\\n' + (guide || s.title) + '\\n\\n';\nprompt += 'ТЕХНИЧЕСКИ ДАННИ ОТ СПЕЦИФИКАЦИЯТА:\\n' + JSON.stringify(spec, null, 2).substring(0, 12000) + '\\n\\n';\nprompt += 'ИНФОРМАЦИЯ ЗА ИЗПЪЛНИТЕЛЯ:\\n' + JSON.stringify(ci, null, 2) + '\\n\\n';\n\nif (prev) {\n  prompt += 'ПРЕДИШЕН КОНТЕКСТ (НЕ повтаряй, осигури кохерентност):\\n...' + prev.substring(prev.length > 2000 ? prev.length - 2000 : 0) + '\\n\\n';\n}\nif (fb) {\n  prompt += '⚠️ ОБРАТНА ВРЪЗКА ОТ ВАЛИДАЦИЯ — ЗАДЪЛЖИТЕЛНО ПОПРАВИ:\\n' + fb + '\\n\\n';\n}\n\nprompt += 'ПРАВИЛА ЗА ПИСАНЕ:\\n';\nprompt += '1. САМО тази секция — започни с ' + headingLevel + ' ' + s.id + '. ' + s.title + '\\n';\nprompt += '2. За всяка дейност: КАКВО → КАК → С КАКВО → КОЙ → КОНТРОЛ\\n';\nprompt += '3. Markdown таблици за: оборудване, персонал, графици, контролни планове\\n';\nprompt += '4. Графици: таблици (Дейност | Срок/Период | Ресурси | Отговорник)\\n';\nprompt += '5. Placeholders [⚠️ ПОПЪЛНЕТЕ: ...] за неизвестна информация\\n';\nprompt += '6. НЕ измисляй факти, НЕ пиши generic текст приложим за всяка поръчка\\n';\nprompt += '7. Текстът ТРЯБВА да отчита спецификата на КОНКРЕТНАТА поръчка — конкретни обекти, артикули, местоположения, количества от спецификацията\\n';\nprompt += '8. НЕ повтаряй текст от предишните секции — препращай: \"Както е описано в т. X.X...\"\\n';\nprompt += '9. НЕ пиши въведение/заключение на ЦЕЛИЯ документ\\n';\nprompt += '10. ФОРМАТ НА МЕРКИ: Ако секцията изисква мярка, всяка мярка е САМОСТОЯТЕЛНА и включва:\\n';\nprompt += '   а) Наименование и същност на мярката\\n';\nprompt += '   б) Конкретни дейности за изпълнение\\n';\nprompt += '   в) Времеви план за прилагане\\n';\nprompt += '   г) Конкретен експерт + конкретни задължения\\n';\nprompt += '   д) Контролни дейности и мониторинг (честота, действия при отклонения, лица за контрол)\\n';\nprompt += '   е) Очакван и целен ефект от мярката\\n';\nprompt += '   НЕ обединявай елементи от различни мерки!\\n';\nprompt += '11. Текстът НЕ ТРЯБВА да е формален — трябва да показва реално разбиране на конкретната поръчка\\n';\n\nreturn [{ json: { prompt: prompt } }];"
       },
       "typeVersion": 2
     },
@@ -29,7 +35,10 @@
       "id": "llm",
       "name": "Write Section",
       "type": "@n8n/n8n-nodes-langchain.chainLlm",
-      "position": [520, 300],
+      "position": [
+        520,
+        300
+      ],
       "parameters": {
         "text": "={{ $json.prompt }}",
         "promptType": "define",
@@ -37,7 +46,7 @@
           "messageValues": [
             {
               "type": "system",
-              "message": "You are an expert writer of technical proposals for Bulgarian public procurement. You write in Bulgarian. You write ONE section at a time with surgical precision. RULES: 1) Write ONLY the requested section, not the whole document. 2) Be SPECIFIC to this procurement — no generic text. 3) Use Markdown tables for equipment, personnel, schedules, quality plans. 4) Schedules should be presented as tables with columns: Activity | Timeline | Responsible. 5) Use ONLY facts from the provided data. If data is missing, use placeholder [⚠️ ПОПЪЛНЕТЕ: ...]. 6) NEVER fabricate names, dates, numbers. 7) Match the procurement type — do NOT write about construction for IT projects or vice versa."
+              "message": "# РОЛЯ И ЦЕЛ\nТи си експерт по изготвяне на технически предложения за обществени поръчки в Република България. Пишеш ЕДНА секция наведнъж — професионално, конкретно и технически издържано. Адаптираш стила и нормативните препратки спрямо типа на поръчката (строителство, доставки, услуги).\n\n# ИНСТРУКЦИИ И ОГРАНИЧЕНИЯ\n\n## Задължителни правила\n1. Пиши САМО поисканата секция — не целия документ.\n2. Всяко твърдение ТРЯБВА да е обвързано с КОНКРЕТНАТА поръчка — обекти, артикули, количества, местоположения от спецификацията.\n3. НИКОГА не измисляй имена, дати, числа, сертификати. Ако данни липсват → placeholder [⚠️ ПОПЪЛНЕТЕ: ...].\n4. Нормативни препратки: цитирай САМО реални и релевантни за типа поръчка нормативни актове. За доставки: ЗЗП, ЗТИП, БДС EN стандарти, CE маркировка. За строителство: ЗУТ, Наредба №3/2003, БДС EN. За всички: ЗОП, ППЗОП.\n5. НЕ повтаряй текст от предишни секции — препращай: \"Както е описано в т. X.X...\"\n6. Пиши на български език.\n\n## Структура на дейности: КАКВО → КАК → С КАКВО → КОЙ → КОНТРОЛ\nПри описание на ВСЯКА дейност задължително покрий:\n- КАКВО се прави (конкретната дейност)\n- КАК се изпълнява (технология, метод, последователност)\n- С КАКВО (материали, оборудване, инструменти)\n- КОЙ го прави (експерт/длъжност + квалификация)\n- КАКЪВ КОНТРОЛ се осъществява (проверки, документиране)\n\n## Формат на МЕРКИ\nКогато секцията изисква мярка/мерки, ВСЯКА мярка е САМОСТОЯТЕЛНА и задължително включва:\nа) Наименование на мярката\nб) Същност — какво постига мярката\nв) Конкретни дейности за изпълнение\nг) Времеви план за прилагане на дейностите\nд) Конкретен експерт + конкретни задължения (ако повече от 1 — кой коя дейност)\nе) Контрол и мониторинг: честота на прегледи, действия при отклонения, отговорни лица\nж) Очакван ефект от мярката\nЗАБРАНЕНО: обединяване на елементи от различни мерки!\n\n## Забрани\n- ❌ Generic текст, приложим за всяка поръчка\n- ❌ \"Ще осигурим високо качество\" без конкретен механизъм\n- ❌ Измислени данни (имена, марки, номера на сертификати)\n- ❌ Въведение/заключение на целия документ\n- ❌ Отменени нормативни актове\n\n# СТЪПКИ НА РАЗСЪЖДЕНИЕ (ПРЕДИ ДА ПИШЕШ)\nПреди да генерираш текст, следвай тези стъпки мислено:\n1. Прочети изискването на възложителя — идентифицирай ВСЕКИ реквизит, който трябва да присъства.\n2. За всеки реквизит провери: има ли конкретни данни в спецификацията? Ако да — ЦИТИРАЙ ги с точни стойности.\n3. Ако данни липсват — постави placeholder, не измисляй.\n4. Провери: текстът ти отчита ли спецификата на ТАЗИ поръчка (конкретни обекти, локации, артикули) или е generic?\n5. Ако секцията изисква МЯРКА — структурирай я с 7-те елемента (а-ж).\n6. Провери за вътрешна непротиворечивост с предишните секции.\n7. Провери: спазен ли е указаният обем?\n\n# ФОРМАТ НА ИЗХОДА\n- Markdown с правилно ниво на заглавие (## или ### според инструкцията)\n- Таблици за: списъци на оборудване, персонал, графици, контролни планове, спецификации\n- Графици: таблица (Дейност | Срок/Период | Ресурси | Отговорник)\n- Placeholders: [⚠️ ПОПЪЛНЕТЕ: Точно описание какво да се попълни]\n\n# ПРИМЕРИ\n\n## ❌ ЛОШО (generic, формално):\n\"Фирмата ни разполага с квалифициран персонал и модерно оборудване. Ще осигурим навременна доставка на всички мебели. Качеството ще бъде на най-високо ниво. Нашият екип има богат опит в подобни проекти.\"\n\n## ✅ ДОБРО (конкретно, обвързано с поръчката):\n\"За доставка на корпусни мебели за ДГ „Чепеларе\" — База „Здравец\" (5 занимални + 3 спални) и База „Елхица\" (4 занимални + 2 спални), БАРИН АЛП ЕООД ще приложи следния подход:\n\n**Етап 1: Производство на корпусните мебели (Седмица 1-3)**\nПроизводството ще се извърши в [⚠️ ПОПЪЛНЕТЕ: адрес на производствената база] при следните условия:\n- Материал: ПДЧ с дебелина 18 мм, клас Е1 съгласно БДС EN 14322, с ABS кантиране 2 мм\n- Детски шкафчета за лични вещи: размери съгласно ТС — височина 120 см, широчина 25 см на секция, 5 секции в блок\n- Контрол: 100% проверка на размерите с калибрирани измервателни инструменти; визуална инспекция на повърхността за дефекти\n\n| Артикул | Количество Здравец | Количество Елхица | Общо | Стандарт |\n|---------|-------------------|-------------------|------|----------|\n| Детски шкафчета | [⚠️ ПОПЪЛНЕТЕ] | [⚠️ ПОПЪЛНЕТЕ] | [⚠️ ПОПЪЛНЕТЕ] | БДС EN 14749 |\n| Детски маси | [⚠️ ПОПЪЛНЕТЕ] | [⚠️ ПОПЪЛНЕТЕ] | [⚠️ ПОПЪЛНЕТЕ] | БДС EN 1729-1 |\"\n\n# ФИНАЛНИ ИНСТРУКЦИИ\n- Текстът НЕ ТРЯБВА да е формален — трябва да показва реално разбиране на конкретната поръчка.\n- Всяка мярка е НАПЪЛНО самостоятелна с всички 7 елемента.\n- Ако нещо не знаеш — placeholder, НИКОГА не измисляй.\n- Пиши САМО поисканата секция."
             }
           ]
         }
@@ -48,7 +57,10 @@
       "id": "model",
       "name": "Claude Sonnet",
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
-      "position": [440, 520],
+      "position": [
+        440,
+        520
+      ],
       "parameters": {
         "model": "anthropic/claude-sonnet-4",
         "options": {
@@ -68,7 +80,10 @@
       "id": "format",
       "name": "Format Output",
       "type": "n8n-nodes-base.code",
-      "position": [780, 300],
+      "position": [
+        780,
+        300
+      ],
       "parameters": {
         "jsCode": "var raw = ($json.text || $json.response || '').trim();\n\n// Handle error from chainLlm (onError: continueRegularOutput)\nif ($json.error || $json.errorMessage || (!raw && $input.first().json.error)) {\n  var errMsg = $json.errorMessage || $json.error || 'Unknown AI error';\n  if (typeof errMsg === 'object') errMsg = JSON.stringify(errMsg);\n  return [{\n    json: {\n      sectionText: '',\n      error: true,\n      errorMessage: String(errMsg).substring(0, 500),\n      stats: { wordCount: 0, estimatedPages: 0, placeholders: 0, tables: 0 }\n    }\n  }];\n}\n\nvar wordCount = raw.split(/\\s+/).length;\nvar placeholders = (raw.match(/\\[⚠️ ПОПЪЛНЕТЕ:/g) || []).length;\nvar tableCount = (raw.match(/\\|.*\\|/g) || []).length;\n\nreturn [{\n  json: {\n    sectionText: raw,\n    stats: {\n      wordCount: wordCount,\n      estimatedPages: Math.round(wordCount / 375),\n      placeholders: placeholders,\n      tables: Math.floor(tableCount / 3)\n    }\n  }\n}];"
       },
@@ -78,7 +93,10 @@
       "id": "respond",
       "name": "Respond",
       "type": "n8n-nodes-base.respondToWebhook",
-      "position": [1040, 300],
+      "position": [
+        1040,
+        300
+      ],
       "parameters": {
         "respondWith": "json",
         "responseBody": "={{ JSON.stringify($json) }}"
@@ -87,11 +105,63 @@
     }
   ],
   "connections": {
-    "Webhook": { "main": [[{ "node": "Prepare Section Prompt", "type": "main", "index": 0 }]] },
-    "Prepare Section Prompt": { "main": [[{ "node": "Write Section", "type": "main", "index": 0 }]] },
-    "Claude Sonnet": { "ai_languageModel": [[{ "node": "Write Section", "type": "ai_languageModel", "index": 0 }]] },
-    "Write Section": { "main": [[{ "node": "Format Output", "type": "main", "index": 0 }]] },
-    "Format Output": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] }
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Prepare Section Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Section Prompt": {
+      "main": [
+        [
+          {
+            "node": "Write Section",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Sonnet": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Write Section",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Section": {
+      "main": [
+        [
+          {
+            "node": "Format Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Output": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
-  "settings": { "executionOrder": "v1" }
+  "settings": {
+    "executionOrder": "v1"
+  }
 }

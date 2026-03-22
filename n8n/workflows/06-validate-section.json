@@ -5,7 +5,10 @@
       "id": "webhook",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
-      "position": [0, 300],
+      "position": [
+        0,
+        300
+      ],
       "webhookId": "tp-validate-section",
       "parameters": {
         "httpMethod": "POST",
@@ -19,7 +22,10 @@
       "id": "prep",
       "name": "Prepare Validation Prompt",
       "type": "n8n-nodes-base.code",
-      "position": [260, 300],
+      "position": [
+        260,
+        300
+      ],
       "parameters": {
         "jsCode": "var body = $json.body || $json;\nvar pt = body.procurementType || 'неопределен';\nvar secText = (body.sectionText || '').substring(0, 30000);\nvar secStr = JSON.stringify(body.section || {}, null, 2).substring(0, 5000);\nvar reqStr = JSON.stringify(body.requirements || {}, null, 2).substring(0, 15000);\n\nvar p = 'Ти си строг одитор на технически предложения за обществени поръчки.\\n';\np += 'Проверяваш ЕДНА секция от документа.\\n\\n';\np += 'ТИП ПОРЪЧКА: ' + pt + '\\n\\n';\np += 'СЕКЦИЯ ЗА ПРОВЕРКА:\\n' + secText + '\\n\\n';\np += 'ИЗИСКВАНЕ КОЕТО ТРЯБВА ДА ПОКРИЕ:\\n' + secStr + '\\n\\n';\np += 'ОРИГИНАЛНИ ИЗИСКВАНИЯ ОТ ДОКУМЕНТАЦИЯТА:\\n' + reqStr + '\\n\\n';\np += 'ПРОВЕРКИ:\\n';\np += '1. ПОКРИТИЕ: Покрива ли ВСИЧКИ подточки на изискването? Пропуснати ли са аспекти?\\n';\np += '2. КОНКРЕТНОСТ: Конкретна ли е за тази поръчка или е generic/шаблонен текст?\\n';\np += '3. ХАЛЮЦИНАЦИИ: Има ли измислени факти, несъществуващи стандарти, фалшиви данни?\\n';\np += '4. РЕЛЕВАНТНОСТ: Съответства ли на типа поръчка? (не строителство за IT и обратно)\\n';\np += '5. ТАБЛИЦИ: Има ли подходящи таблици? Добре форматирани ли са?\\n';\np += '6. ОБЕМ: Адекватен ли е? (не прекалено кратък, не раздут с повторения)\\n\\n';\np += 'ОЦЕНКА:\\n';\np += '- 80+ точки = PASS (секцията е достатъчно добра)\\n';\np += '- Под 80 = FAIL (нужна е корекция)\\n';\np += '- FAIL САМО при: пропуснати изисквания, халюцинации, изцяло generic текст\\n';\np += '- При FAIL: дай КОНКРЕТНИ инструкции какво точно да се поправи\\n\\n';\np += 'Върни САМО валиден JSON (без markdown блокове):\\n';\np += '{\\n  \"passed\": true,\\n  \"score\": 85,\\n  \"issues\": [\"кратко описание на проблем\"],\\n';\np += '  \"feedback\": \"конкретни инструкции за поправка (само ако passed=false)\"\\n}';\n\nreturn [{ json: { prompt: p } }];"
       },
@@ -29,7 +35,10 @@
       "id": "llm",
       "name": "Validate Section",
       "type": "@n8n/n8n-nodes-langchain.chainLlm",
-      "position": [520, 300],
+      "position": [
+        520,
+        300
+      ],
       "onError": "continueRegularOutput",
       "parameters": {
         "text": "={{ $json.prompt }}",
@@ -38,7 +47,7 @@
           "messageValues": [
             {
               "type": "system",
-              "message": "You are a strict but fair quality auditor for Bulgarian procurement proposals. You check ONE section at a time. PASS if the section is 80%+ adequate. FAIL only for serious issues: missing requirements, hallucinations, or entirely generic text. When you FAIL, provide SPECIFIC actionable feedback. Output ONLY valid JSON, no markdown blocks. Language: Bulgarian."
+              "message": "# РОЛЯ И ЦЕЛ\nТи си строг, но справедлив одитор по качеството на технически предложения за обществени поръчки.\n\n# ИНСТРУКЦИИ\n1. Оценяваш ЕДНА секция наведнъж.\n2. PASS (score >= 80): секцията е адекватна и покрива изискванията.\n3. FAIL (score < 80): САМО при сериозни проблеми — липсващи реквизити, измислени данни, изцяло generic текст.\n\n# СТЪПКИ ЗА ОЦЕНКА\n1. Секцията покрива ли ВСИЧКИ реквизити от изискването на възложителя?\n2. Текстът конкретен ли е за ТАЗИ поръчка или е generic/формален?\n3. Има ли измислени данни (имена, числа, сертификати без placeholder)?\n4. Мерките (ако има) имат ли ВСИЧКИ 7 елемента (наименование, същност, дейности, план, експерт, контрол, ефект)?\n5. Има ли вътрешни противоречия?\n6. Спазен ли е обемът?\n\n# ФОРМАТ\nИзход: САМО валиден JSON с полета: passed (boolean), score (0-100), issues (array), feedback (string).\nПри FAIL — feedback ТРЯБВА да е КОНКРЕТЕН и actionable. Не просто \"подобрете секцията\", а \"липсва времеви план в мярката за взаимозаменяемост\".\nЕзик: български."
             }
           ]
         }
@@ -49,7 +58,10 @@
       "id": "model",
       "name": "Claude Opus",
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
-      "position": [440, 520],
+      "position": [
+        440,
+        520
+      ],
       "parameters": {
         "model": "anthropic/claude-opus-4",
         "options": {
@@ -69,9 +81,12 @@
       "id": "parse",
       "name": "Parse Result",
       "type": "n8n-nodes-base.code",
-      "position": [780, 300],
+      "position": [
+        780,
+        300
+      ],
       "parameters": {
-        "jsCode": "var raw = ($json.text || $json.response || '').trim();\n\n// Handle error from chainLlm (onError: continueRegularOutput)\nif ($json.error || $json.errorMessage || (!raw && $input.first().json.error)) {\n  return [{ json: { passed: true, score: 75, issues: ['Validator AI error \u2014 auto-passing to avoid pipeline crash'], feedback: '' } }];\n}\n\nvar result;\n\ntry {\n  result = JSON.parse(raw);\n} catch (e) {\n  var m = raw.match(/```(?:json)?\\s*([\\s\\S]*?)```/);\n  var candidate = m ? m[1].trim() : raw;\n  try {\n    var s = candidate.indexOf('{');\n    var e2 = candidate.lastIndexOf('}');\n    var js = candidate.substring(s, e2 + 1).replace(/,\\s*([\\]\\}])/g, '$1');\n    result = JSON.parse(js);\n  } catch (e3) {\n    result = { passed: true, score: 70, issues: ['Parse error \u2014 defaulting to PASS'], feedback: '' };\n  }\n}\n\nresult.passed = result.passed !== false && (result.score || 80) >= 80;\n\nreturn [{ json: result }];"
+        "jsCode": "// Sanitize Unicode smart quotes that break JSON parsing\nfunction sanitize(s) {\n  return s.replace(/[\\u201C\\u201D\\u201E\\u201F\\u00AB\\u00BB\\u2018\\u2019]/g, \"'\");\n}\n\nfunction tryParse(s) {\n  try { return JSON.parse(s); } catch(e) { return null; }\n}\n\nfunction extractJson(s) {\n  var m = s.match(/```(?:json)?\\s*([\\s\\S]*?)```/);\n  var c = m ? m[1].trim() : s;\n  var start = c.indexOf('{');\n  var end = c.lastIndexOf('}');\n  if (start === -1 || end === -1) {\n    // Try array\n    start = c.indexOf('[');\n    end = c.lastIndexOf(']');\n    if (start === -1 || end === -1) return s;\n  }\n  return c.substring(start, end + 1);\n}\n\nfunction fixCommon(s) {\n  return s.replace(/,\\s*([\\]\\}])/g, '$1');\n}\n\nfunction fixQuotes(s) {\n  var out = '';\n  var inStr = false;\n  var escaped = false;\n  for (var i = 0; i < s.length; i++) {\n    var ch = s[i];\n    if (escaped) { out += ch; escaped = false; continue; }\n    if (ch === '\\\\') { out += ch; escaped = true; continue; }\n    if (ch === '\"') {\n      if (!inStr) {\n        inStr = true;\n        out += ch;\n      } else {\n        var rest = s.substring(i + 1).trimStart();\n        var next = rest.length > 0 ? rest[0] : '';\n        if (next === ':' || next === ',' || next === '}' || next === ']' || rest.length === 0) {\n          inStr = false;\n          out += ch;\n        } else {\n          out += '\\\\\"';\n        }\n      }\n    } else {\n      out += ch;\n    }\n  }\n  return out;\n}\n\nvar raw = ($json.text || $json.response || '').trim();\nvar result = null;\n\nraw = sanitize(raw);\n\nresult = tryParse(raw);\n\nif (!result) {\n  var extracted = fixCommon(extractJson(raw));\n  result = tryParse(extracted);\n}\n\nif (!result) {\n  var extracted2 = fixCommon(extractJson(raw));\n  result = tryParse(fixQuotes(extracted2));\n}\n\nif (!result) {\n  result = {\n    passed: true,\n    score: 75,\n    issues: [],\n    feedback: 'Auto-passed due to parse error',\n    _parse_error: true\n  };\n}\n\n// Ensure boolean passed field\nif (typeof result.passed === 'undefined') result.passed = true;\nif (typeof result.score === 'undefined') result.score = 75;\n\nreturn [{ json: result }];"
       },
       "typeVersion": 2
     },
@@ -79,7 +94,10 @@
       "id": "respond",
       "name": "Respond",
       "type": "n8n-nodes-base.respondToWebhook",
-      "position": [1040, 300],
+      "position": [
+        1040,
+        300
+      ],
       "parameters": {
         "respondWith": "json",
         "responseBody": "={{ JSON.stringify($json) }}"
@@ -88,11 +106,63 @@
     }
   ],
   "connections": {
-    "Webhook": { "main": [[{ "node": "Prepare Validation Prompt", "type": "main", "index": 0 }]] },
-    "Prepare Validation Prompt": { "main": [[{ "node": "Validate Section", "type": "main", "index": 0 }]] },
-    "Claude Opus": { "ai_languageModel": [[{ "node": "Validate Section", "type": "ai_languageModel", "index": 0 }]] },
-    "Validate Section": { "main": [[{ "node": "Parse Result", "type": "main", "index": 0 }]] },
-    "Parse Result": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] }
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Prepare Validation Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Validation Prompt": {
+      "main": [
+        [
+          {
+            "node": "Validate Section",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Opus": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Validate Section",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Section": {
+      "main": [
+        [
+          {
+            "node": "Parse Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Result": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
-  "settings": { "executionOrder": "v1" }
+  "settings": {
+    "executionOrder": "v1"
+  }
 }

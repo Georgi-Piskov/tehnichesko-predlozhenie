@@ -5,7 +5,10 @@
       "id": "webhook",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
-      "position": [0, 300],
+      "position": [
+        0,
+        300
+      ],
       "webhookId": "tp-step-02-requirements",
       "parameters": {
         "httpMethod": "POST",
@@ -19,7 +22,10 @@
       "id": "prep",
       "name": "Prepare Data",
       "type": "n8n-nodes-base.code",
-      "position": [260, 300],
+      "position": [
+        260,
+        300
+      ],
       "parameters": {
         "jsCode": "var body = $json.body || $json;\nvar docText = body.documentationText || body.fullText || '';\nif (docText.length > 80000) docText = docText.substring(0, 80000);\nreturn [{ json: { documentText: docText } }];"
       },
@@ -29,7 +35,10 @@
       "id": "llm",
       "name": "Extract Requirements",
       "type": "@n8n/n8n-nodes-langchain.chainLlm",
-      "position": [520, 300],
+      "position": [
+        520,
+        300
+      ],
       "parameters": {
         "text": "=Ти си експерт по българско законодателство за обществени поръчки (ЗОП, ППЗОП).\n\n## ЗАДАЧА\nИзвлечи АБСОЛЮТНО ВСИЧКИ изисквания за техническото предложение от документацията.\n\n## КЪДЕ ДА ТЪРСИШ\n- Раздел \"Показатели за оценка на техническите предложения\"\n- Раздел \"Методика за оценка\" / \"Критерии за възлагане\"\n- Раздел \"Изисквания към техническото предложение\"\n- Раздел \"Указания за подготовка на офертата\"\n- Приложения/Образци свързани с техническото предложение\n\n## КАКВО ДА ИЗВЛЕЧЕШ\n1. Основни критерии за оценка — номерираните изисквания/показатели\n2. Подточки — ако изискването казва \"опишете X, включително а), б), в)\" — всяка подточка ОТДЕЛНО\n3. Методика на оценяване — как се оценява, какво дава максимум точки, какво води до 0 точки\n4. Формат и ограничения — лимит на страници, задължителни приложения\n5. Кръстосани препратки — \"виж Техническата спецификация за X\"\n\n## КРИТИЧНИ ПРАВИЛА ПРОТИВ ХАЛЮЦИНАЦИИ\n- Извличай САМО текст, който РЕАЛНО присъства в документа\n- ДОСЛОВНО копиране — не перифразирай, не интерпретирай\n- Ако нещо НЕ е споменато в документа → НЕ го добавяй, постави null\n- НЕ измисляй точки, критерии или подточки, които ги няма\n- Ако не можеш да намериш методика за оценка → scoring: null\n- Ако документът е за услуги → НЕ добавяй строителни изисквания\n- Ако документът е за доставки → НЕ добавяй проектантски изисквания\n- Пропускането на подточка = ДИСКВАЛИФИКАЦИЯ\n- Добавянето на несъществуващо изискване = СЪЩО ДИСКВАЛИФИКАЦИЯ\n\n## ФОРМАТ НА ОТГОВОР\nВърни САМО валиден JSON (без markdown блокове, без обяснения):\n{\n  \"proposal_type\": \"Техническо предложение | Работна програма | Концепция\",\n  \"procurement_subject\": \"Пълно наименование от документа или null\",\n  \"contracting_authority\": \"Възложител от документа или null\",\n  \"procurement_type\": \"строителство | услуги | доставки | проектиране | смесена\",\n  \"requirements\": [\n    {\n      \"id\": \"оригинален номер от документа\",\n      \"title\": \"Дословен текст на заглавието\",\n      \"full_text\": \"Дословен текст — копиран точно от документа\",\n      \"sub_requirements\": [{\"id\": \"1.1\", \"text\": \"Дословен текст\"}],\n      \"scoring\": {\"max_points\": null, \"criteria\": \"Дословен текст от методиката или null\"}\n    }\n  ],\n  \"format_requirements\": {\"page_limit\": null, \"attachments\": [], \"instructions\": []},\n  \"references_to_spec\": [],\n  \"extraction_confidence\": \"HIGH | MEDIUM | LOW\",\n  \"notes\": \"Бележки за неясноти или проблеми при извличането\"\n}\n\nДОКУМЕНТАЦИЯ:\n{{ $json.documentText }}",
         "promptType": "define",
@@ -37,7 +46,7 @@
           "messageValues": [
             {
               "type": "system",
-              "message": "You are an expert in Bulgarian public procurement law (ЗОП, ППЗОП). CRITICAL RULES:\n1. Extract ONLY requirements that ACTUALLY EXIST in the provided text\n2. NEVER invent, add, or hallucinate requirements\n3. Copy text VERBATIM from the document\n4. If a field cannot be determined from the document, use null\n5. If the document is about services, do NOT add construction requirements\n6. If the document is about supplies, do NOT add design requirements\n7. Output ONLY valid JSON, no markdown blocks, no explanations\nLanguage: Bulgarian."
+              "message": "# РОЛЯ И ЦЕЛ\nТи си експерт по български ЗОП (Закон за обществените поръчки) и ППЗОП. Задачата ти е да извлечеш ВСИЧКИ изисквания към техническото предложение от предоставената документация.\n\n# ИНСТРУКЦИИ\n1. Извличай САМО изисквания, които РЕАЛНО СЪЩЕСТВУВАТ в текста — НИКОГА не измисляй.\n2. Копирай текста на изискванията ДОСЛОВНО от документа.\n3. Ако поле не може да се определи от документа → null.\n4. Ако документът е за доставки — НЕ добавяй строителни изисквания. Ако е за услуги — НЕ добавяй производствени.\n5. ЗАПАЗИ оригиналната номерация от документацията.\n6. Под-изисквания (мерки, подточки) извличай ПООТДЕЛНО.\n7. Изисквания за формат на мерки (наименование, същност, дейности и т.н.) включи в format_requirements.\n\n# СТЪПКИ\n1. Намери раздела за техническо предложение / предложение за изпълнение.\n2. Идентифицирай основните номерирани изисквания (1.1, 1.2, 1.3...).\n3. За всяко: копирай заглавие + пълен текст + подточки.\n4. Намери общи изисквания (формат на мерки, забрани за формалност, основания за отстраняване).\n5. Намери информация за оценяване (scoring) — ако липсва, scoring = null.\n\n# ФОРМАТ\nИзход: САМО валиден JSON. Без markdown блокове, без обяснения. Език: български."
             }
           ]
         }
@@ -48,7 +57,10 @@
       "id": "model",
       "name": "Claude Sonnet",
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
-      "position": [440, 520],
+      "position": [
+        440,
+        520
+      ],
       "parameters": {
         "model": "anthropic/claude-sonnet-4",
         "options": {
@@ -68,9 +80,12 @@
       "id": "parse",
       "name": "Parse Requirements",
       "type": "n8n-nodes-base.code",
-      "position": [780, 300],
+      "position": [
+        780,
+        300
+      ],
       "parameters": {
-        "jsCode": "const raw = ($json.text || $json.response || '').trim();\nlet result;\n\ntry {\n  result = JSON.parse(raw);\n} catch (e) {\n  const m = raw.match(/```(?:json)?\\s*([\\s\\S]*?)```/);\n  const candidate = m ? m[1].trim() : raw;\n  try {\n    const s = candidate.indexOf('{');\n    const e2 = candidate.lastIndexOf('}');\n    let jsonStr = candidate.substring(s, e2 + 1);\n    jsonStr = jsonStr.replace(/,\\s*([\\]\\}])/g, '$1');\n    result = JSON.parse(jsonStr);\n  } catch (e3) {\n    const subj = raw.match(/procurement_subject[\":\\s]+[\"']([^\"']+)/);\n    result = {\n      proposal_type: 'Техническо предложение',\n      procurement_subject: subj ? subj[1] : 'Не е разпознато',\n      requirements: [],\n      _parse_error: 'JSON parse failed, raw response stored',\n      _raw: raw.substring(0, 2000)\n    };\n  }\n}\n\nreturn [{ json: { requirements: result } }];"
+        "jsCode": "// Sanitize Unicode smart quotes that break JSON parsing\nfunction sanitize(s) {\n  return s.replace(/[\\u201C\\u201D\\u201E\\u201F\\u00AB\\u00BB\\u2018\\u2019]/g, \"'\");\n}\n\nfunction tryParse(s) {\n  try { return JSON.parse(s); } catch(e) { return null; }\n}\n\nfunction extractJson(s) {\n  var m = s.match(/```(?:json)?\\s*([\\s\\S]*?)```/);\n  var c = m ? m[1].trim() : s;\n  var start = c.indexOf('{');\n  var end = c.lastIndexOf('}');\n  if (start === -1 || end === -1) {\n    // Try array\n    start = c.indexOf('[');\n    end = c.lastIndexOf(']');\n    if (start === -1 || end === -1) return s;\n  }\n  return c.substring(start, end + 1);\n}\n\nfunction fixCommon(s) {\n  return s.replace(/,\\s*([\\]\\}])/g, '$1');\n}\n\nfunction fixQuotes(s) {\n  var out = '';\n  var inStr = false;\n  var escaped = false;\n  for (var i = 0; i < s.length; i++) {\n    var ch = s[i];\n    if (escaped) { out += ch; escaped = false; continue; }\n    if (ch === '\\\\') { out += ch; escaped = true; continue; }\n    if (ch === '\"') {\n      if (!inStr) {\n        inStr = true;\n        out += ch;\n      } else {\n        var rest = s.substring(i + 1).trimStart();\n        var next = rest.length > 0 ? rest[0] : '';\n        if (next === ':' || next === ',' || next === '}' || next === ']' || rest.length === 0) {\n          inStr = false;\n          out += ch;\n        } else {\n          out += '\\\\\"';\n        }\n      }\n    } else {\n      out += ch;\n    }\n  }\n  return out;\n}\n\nvar raw = ($json.text || $json.response || '').trim();\nvar result = null;\n\nraw = sanitize(raw);\n\nresult = tryParse(raw);\n\nif (!result) {\n  var extracted = fixCommon(extractJson(raw));\n  result = tryParse(extracted);\n}\n\nif (!result) {\n  var extracted2 = fixCommon(extractJson(raw));\n  result = tryParse(fixQuotes(extracted2));\n}\n\nif (!result) {\n  result = {\n    procurement_type: 'unknown',\n    requirements: [],\n    _raw: raw.substring(0, 5000),\n    _parse_error: true\n  };\n}\n\nreturn [{ json: result }];"
       },
       "typeVersion": 2
     },
@@ -78,7 +93,10 @@
       "id": "respond",
       "name": "Respond",
       "type": "n8n-nodes-base.respondToWebhook",
-      "position": [1040, 300],
+      "position": [
+        1040,
+        300
+      ],
       "parameters": {
         "respondWith": "json",
         "responseBody": "={{ JSON.stringify($json) }}"
@@ -87,11 +105,63 @@
     }
   ],
   "connections": {
-    "Webhook": { "main": [[{ "node": "Prepare Data", "type": "main", "index": 0 }]] },
-    "Prepare Data": { "main": [[{ "node": "Extract Requirements", "type": "main", "index": 0 }]] },
-    "Claude Sonnet": { "ai_languageModel": [[{ "node": "Extract Requirements", "type": "ai_languageModel", "index": 0 }]] },
-    "Extract Requirements": { "main": [[{ "node": "Parse Requirements", "type": "main", "index": 0 }]] },
-    "Parse Requirements": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] }
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Prepare Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Data": {
+      "main": [
+        [
+          {
+            "node": "Extract Requirements",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Sonnet": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Extract Requirements",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Requirements": {
+      "main": [
+        [
+          {
+            "node": "Parse Requirements",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Requirements": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
-  "settings": { "executionOrder": "v1" }
+  "settings": {
+    "executionOrder": "v1"
+  }
 }

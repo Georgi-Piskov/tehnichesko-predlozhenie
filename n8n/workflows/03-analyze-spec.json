@@ -5,7 +5,10 @@
       "id": "webhook",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
-      "position": [0, 300],
+      "position": [
+        0,
+        300
+      ],
       "webhookId": "tp-step-03-analyze",
       "parameters": {
         "httpMethod": "POST",
@@ -19,7 +22,10 @@
       "id": "prep",
       "name": "Prepare Data",
       "type": "n8n-nodes-base.code",
-      "position": [260, 300],
+      "position": [
+        260,
+        300
+      ],
       "parameters": {
         "jsCode": "var body = $json.body || $json;\nvar specText = body.specificationText || body.fullText || '';\nif (specText.length > 80000) specText = specText.substring(0, 80000);\nreturn [{ json: { specText: specText } }];"
       },
@@ -29,7 +35,10 @@
       "id": "llm",
       "name": "Analyze Spec",
       "type": "@n8n/n8n-nodes-langchain.chainLlm",
-      "position": [520, 300],
+      "position": [
+        520,
+        300
+      ],
       "parameters": {
         "text": "=Ти си експерт-технически анализатор за обществени поръчки в България.\n\n## ЗАДАЧА\nИзвлечи ВСИЧКИ конкретни технически данни от документацията/спецификацията.\n\n## КЪДЕ ДА ТЪРСИШ\n- Техническа спецификация / Задание\n- Количествена сметка\n- Технически изисквания към изпълнението\n- Описание на обекта/предмета\n- Изисквания за персонал и оборудване\n- Нормативни изисквания\n\n## КАКВО ДА ИЗВЛЕЧЕШ\n1. Описание на обекта — какво е предметът (НЕ предполагай — прочети от текста)\n2. Обхват на работите/дейностите — конкретни дейности, фази, резултати\n3. Технически параметри — САМО споменатите в текста (материали, стандарти, размери)\n4. Персонал — САМО ако е описан в документа\n5. Оборудване — САМО ако е описано в документа\n6. Нормативна рамка — САМО цитираните закони/наредби/стандарти\n7. Срокове, гаранции, ЗБУТ, екология — САМО ако са описани\n\n## КРИТИЧНИ ПРАВИЛА ПРОТИВ ХАЛЮЦИНАЦИИ\n- САМО факти от ТОЗИ документ — НИЩО измислено\n- Ако поле ЛИПСВА в документа → стойност null или празен масив []\n- НЕ добавяй технически параметри, които не са написани в текста\n- НЕ предполагай тип обект — прочети го от документа\n- Ако документът е за услуги → НЕ добавяй строителни материали\n- Ако документът е за IT → НЕ добавяй бетон, арматура, изолация\n- Конкретност: цитирай точните стойности от текста\n- Ако нещо е неясно → запиши го точно както е, не интерпретирай\n\n## ФОРМАТ\nВърни САМО валиден JSON (без markdown блокове):\n{\n  \"object\": {\n    \"type\": \"строителство | проектиране | доставка | услуга | смесена | null\",\n    \"name\": \"Наименование от документа или null\",\n    \"description\": \"Описание от документа или null\",\n    \"location\": \"Местоположение от документа или null\"\n  },\n  \"scope_of_work\": [{\"phase\": \"\", \"activities\": [], \"deliverables\": []}],\n  \"technical_parameters\": [{\"category\": \"\", \"parameter\": \"\", \"value\": \"\", \"standard\": \"\"}],\n  \"personnel_requirements\": [{\"role\": \"\", \"qualifications\": \"\"}],\n  \"equipment_requirements\": [{\"type\": \"\", \"specs\": \"\"}],\n  \"regulatory_framework\": [],\n  \"timeline\": {\"total_duration\": null, \"phases\": []},\n  \"warranty_periods\": [{\"type\": \"\", \"period\": \"\"}],\n  \"safety_requirements\": [],\n  \"environmental_requirements\": [],\n  \"key_quantities\": [{\"item\": \"\", \"quantity\": \"\", \"unit\": \"\"}],\n  \"extraction_confidence\": \"HIGH | MEDIUM | LOW\",\n  \"notes\": \"Бележки — какво липсва, какво е неясно\"\n}\n\nВАЖНО: Празните масиви [] и null стойности са ПРАВИЛНИЯТ отговор когато данните ЛИПСВАТ. НЕ ги попълвай с измислени стойности!\n\nДОКУМЕНТАЦИЯ/СПЕЦИФИКАЦИЯ:\n{{ $json.specText }}",
         "promptType": "define",
@@ -37,7 +46,7 @@
           "messageValues": [
             {
               "type": "system",
-              "message": "You are an expert technical analyst for Bulgarian public procurement. CRITICAL RULES:\n1. Extract ONLY facts that ACTUALLY EXIST in the provided text\n2. NEVER invent technical parameters, materials, quantities, or standards\n3. If information is NOT in the document, use null or empty array []\n4. Do NOT assume the project type — read it from the document\n5. Empty arrays and null values are the CORRECT answer when data is missing\n6. Output ONLY valid JSON, no markdown, no explanations\nLanguage: Bulgarian."
+              "message": "# РОЛЯ И ЦЕЛ\nТи си технически анализатор за обществени поръчки в България. Извличаш конкретни технически данни от спецификации — параметри, материали, количества, стандарти, размери.\n\n# ИНСТРУКЦИИ\n1. Извличай САМО факти, които РЕАЛНО СЪЩЕСТВУВАТ в текста.\n2. НИКОГА не измисляй технически параметри, материали, количества или стандарти.\n3. Ако информация липсва → null или празен масив [].\n4. НЕ предполагай типа на проекта — прочети го от документа.\n5. Празни масиви и null стойности са ПРАВИЛНИЯТ отговор когато данни липсват.\n6. За доставки на мебели: извлечи артикули, размери, материали, стандарти (БДС EN), количества по обекти/локации.\n7. За строителство: извлечи видове СМР, площи, конструкции, материали, стандарти.\n\n# СТЪПКИ\n1. Определи типа поръчка (доставки/строителство/услуги).\n2. Извлечи ВСИЧКИ артикули/позиции с количества.\n3. За всеки артикул: размери, материали, стандарти, специални изисквания.\n4. Извлечи локации/обекти и разпределение на количествата.\n5. Извлечи изисквания за безопасност, екология, сертификация.\n\n# ФОРМАТ\nИзход: САМО валиден JSON. Без markdown, без обяснения. Език: български."
             }
           ]
         }
@@ -48,7 +57,10 @@
       "id": "model",
       "name": "Claude Sonnet",
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
-      "position": [440, 520],
+      "position": [
+        440,
+        520
+      ],
       "parameters": {
         "model": "anthropic/claude-sonnet-4",
         "options": {
@@ -68,9 +80,12 @@
       "id": "parse",
       "name": "Parse Spec Data",
       "type": "n8n-nodes-base.code",
-      "position": [780, 300],
+      "position": [
+        780,
+        300
+      ],
       "parameters": {
-        "jsCode": "const raw = ($json.text || $json.response || '').trim();\nlet result;\n\ntry {\n  result = JSON.parse(raw);\n} catch (e) {\n  const m = raw.match(/```(?:json)?\\s*([\\s\\S]*?)```/);\n  const candidate = m ? m[1].trim() : raw;\n  try {\n    const s = candidate.indexOf('{');\n    const e2 = candidate.lastIndexOf('}');\n    let jsonStr = candidate.substring(s, e2 + 1);\n    jsonStr = jsonStr.replace(/,\\s*([\\]\\}])/g, '$1');\n    result = JSON.parse(jsonStr);\n  } catch (e3) {\n    result = { object: { name: 'Parse error' }, _raw: raw.substring(0, 2000) };\n  }\n}\n\nreturn [{ json: { specData: result } }];"
+        "jsCode": "// Sanitize Unicode smart quotes that break JSON parsing\nfunction sanitize(s) {\n  return s.replace(/[\\u201C\\u201D\\u201E\\u201F\\u00AB\\u00BB\\u2018\\u2019]/g, \"'\");\n}\n\nfunction tryParse(s) {\n  try { return JSON.parse(s); } catch(e) { return null; }\n}\n\nfunction extractJson(s) {\n  var m = s.match(/```(?:json)?\\s*([\\s\\S]*?)```/);\n  var c = m ? m[1].trim() : s;\n  var start = c.indexOf('{');\n  var end = c.lastIndexOf('}');\n  if (start === -1 || end === -1) {\n    // Try array\n    start = c.indexOf('[');\n    end = c.lastIndexOf(']');\n    if (start === -1 || end === -1) return s;\n  }\n  return c.substring(start, end + 1);\n}\n\nfunction fixCommon(s) {\n  return s.replace(/,\\s*([\\]\\}])/g, '$1');\n}\n\nfunction fixQuotes(s) {\n  var out = '';\n  var inStr = false;\n  var escaped = false;\n  for (var i = 0; i < s.length; i++) {\n    var ch = s[i];\n    if (escaped) { out += ch; escaped = false; continue; }\n    if (ch === '\\\\') { out += ch; escaped = true; continue; }\n    if (ch === '\"') {\n      if (!inStr) {\n        inStr = true;\n        out += ch;\n      } else {\n        var rest = s.substring(i + 1).trimStart();\n        var next = rest.length > 0 ? rest[0] : '';\n        if (next === ':' || next === ',' || next === '}' || next === ']' || rest.length === 0) {\n          inStr = false;\n          out += ch;\n        } else {\n          out += '\\\\\"';\n        }\n      }\n    } else {\n      out += ch;\n    }\n  }\n  return out;\n}\n\nvar raw = ($json.text || $json.response || '').trim();\nvar result = null;\n\nraw = sanitize(raw);\n\nresult = tryParse(raw);\n\nif (!result) {\n  var extracted = fixCommon(extractJson(raw));\n  result = tryParse(extracted);\n}\n\nif (!result) {\n  var extracted2 = fixCommon(extractJson(raw));\n  result = tryParse(fixQuotes(extracted2));\n}\n\nif (!result) {\n  result = {\n    project_type: 'unknown',\n    technical_parameters: [],\n    key_quantities: [],\n    _raw: raw.substring(0, 5000),\n    _parse_error: true\n  };\n}\n\nreturn [{ json: { specData: result } }];"
       },
       "typeVersion": 2
     },
@@ -78,7 +93,10 @@
       "id": "respond",
       "name": "Respond",
       "type": "n8n-nodes-base.respondToWebhook",
-      "position": [1040, 300],
+      "position": [
+        1040,
+        300
+      ],
       "parameters": {
         "respondWith": "json",
         "responseBody": "={{ JSON.stringify($json) }}"
@@ -87,11 +105,63 @@
     }
   ],
   "connections": {
-    "Webhook": { "main": [[{ "node": "Prepare Data", "type": "main", "index": 0 }]] },
-    "Prepare Data": { "main": [[{ "node": "Analyze Spec", "type": "main", "index": 0 }]] },
-    "Claude Sonnet": { "ai_languageModel": [[{ "node": "Analyze Spec", "type": "ai_languageModel", "index": 0 }]] },
-    "Analyze Spec": { "main": [[{ "node": "Parse Spec Data", "type": "main", "index": 0 }]] },
-    "Parse Spec Data": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] }
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Prepare Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Data": {
+      "main": [
+        [
+          {
+            "node": "Analyze Spec",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Sonnet": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Analyze Spec",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Spec": {
+      "main": [
+        [
+          {
+            "node": "Parse Spec Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Spec Data": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
-  "settings": { "executionOrder": "v1" }
+  "settings": {
+    "executionOrder": "v1"
+  }
 }

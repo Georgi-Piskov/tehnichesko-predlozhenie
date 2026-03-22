@@ -5,7 +5,10 @@
       "id": "webhook",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
-      "position": [0, 300],
+      "position": [
+        0,
+        300
+      ],
       "webhookId": "tp-step-04-plan",
       "parameters": {
         "httpMethod": "POST",
@@ -19,9 +22,12 @@
       "id": "prep",
       "name": "Prepare Plan Prompt",
       "type": "n8n-nodes-base.code",
-      "position": [260, 300],
+      "position": [
+        260,
+        300
+      ],
       "parameters": {
-        "jsCode": "var body = $json.body || $json;\nvar reqs = body.requirements || {};\nvar reqType = reqs.procurement_type || 'неопределен';\nvar reqStr = JSON.stringify(reqs, null, 2);\nif (reqStr.length > 30000) reqStr = reqStr.substring(0, 30000);\nvar specStr = JSON.stringify(body.specData || {}, null, 2);\nif (specStr.length > 30000) specStr = specStr.substring(0, 30000);\nvar ciStr = JSON.stringify(body.contractorInfo || {}, null, 2);\n\nvar p = 'Ти си експерт по структуриране на технически предложения за обществени поръчки.\\n\\nПолучаваш:\\n\\n';\np += 'ТИП ПОРЪЧКА: ' + reqType + '\\n\\n';\np += 'ИЗВЛЕЧЕНИ ИЗИСКВАНИЯ:\\n' + reqStr + '\\n\\n';\np += 'АНАЛИЗ НА СПЕЦИФИКАЦИЯТА:\\n' + specStr + '\\n\\n';\np += 'ИНФОРМАЦИЯ ЗА ИЗПЪЛНИТЕЛЯ:\\n' + ciStr + '\\n\\n';\np += '## ЗАДАЧА\\nСъздай ДЕТАЙЛЕН план на техническото предложение.\\n\\n';\np += '⚠️ КРИТИЧНО: Всяка ПОДСЕКЦИЯ ще бъде написана от ОТДЕЛЕН AI агент в ОТДЕЛЕН API call. ';\np += 'Агентът вижда САМО своята подсекция от плана. Затова:\\n';\np += '- Указанията за всяка подсекция трябва да са САМОДОСТАТЪЧНИ\\n';\np += '- Всяка подсекция МАКСИМУМ 5 страници (~1875 думи)\\n';\np += '- Ако една тема изисква повече от 5 стр. — раздели я на 2+ подсекции\\n\\n';\np += '## ПРАВИЛА ЗА ПЛАНА\\n';\np += '1. Една ГЛАВНА секция за ВСЯКО изискване от документацията\\n';\np += '2. Всяка главна секция съдържа 3-8 подсекции\\n';\np += '3. Всяка ПОДСЕКЦИЯ е МАКСИМУМ 5 страници (ако темата е по-голяма — раздели на части)\\n';\np += '4. За всяка подсекция: конкретно какво да се напише, кои данни от спецификацията да се ползват\\n';\np += '5. Планирай таблици с точни колони (оборудване, персонал, графици, контрол на качество)\\n';\np += '6. Графици: таблици с Дейност | Седмица/Месец 1 | Седмица/Месец 2 | ...\\n';\np += '7. Реалистичен общ обем: 30-100 стр. в зависимост от сложността\\n';\np += '8. НЕ добавяй секции за несъществуващи изисквания\\n';\np += '9. Ако requirements е празен → базова структура (представяне, подход, график, организация)\\n';\np += '10. Ако specData полета са null → не създавай секции за тях\\n';\np += '11. Декларации (чл. 102 ЗОП и т.н.) = отделни подсекции с кратко съдържание, НЕ 10 стр.\\n\\n';\np += '## ФОРМАТ\\nВърни САМО валиден JSON (БЕЗ markdown блокове):\\n';\np += '{\\n  \"document_title\": \"ТЕХНИЧЕСКО ПРЕДЛОЖЕНИЕ за [точно наименование]\",\\n';\np += '  \"procurement_type\": \"строителство | услуги | доставки | проектиране\",\\n';\np += '  \"total_estimated_pages\": 60,\\n';\np += '  \"sections\": [\\n    {\\n';\np += '      \"id\": \"1\",\\n      \"title\": \"Заглавие от изискването\",\\n';\np += '      \"requirement_id\": \"оригинален ID\",\\n';\np += '      \"subsections\": [\\n        {\\n';\np += '          \"id\": \"1.1\",\\n          \"title\": \"Подзаглавие\",\\n';\np += '          \"estimated_pages\": 4,\\n';\np += '          \"content_guidance\": [\"Конкретно: опишете X със следните детайли...\", \"Включете таблица за Y с колони...\"],\\n';\np += '          \"spec_data_to_use\": [\"technical_parameters\", \"key_quantities\"],\\n';\np += '          \"tables_needed\": [{\"title\": \"Списък оборудване\", \"columns\": [\"Тип\", \"Марка/модел\", \"Брой\", \"Характеристики\"]}]\\n';\np += '        }\\n      ]\\n    }\\n  ],\\n';\np += '  \"appendices\": [{\"title\": \"\", \"description\": \"\"}]\\n}\\n\\n';\np += 'ПОМНИ: Всяка подсекция = ОТДЕЛЕН AI call. Максимум 5 стр. на подсекция!\\n';\np += 'САМО JSON, без друг текст.';\n\nreturn [{ json: { prompt: p } }];"
+        "jsCode": "var body = $json.body || $json;\nvar reqs = body.requirements || {};\nvar reqType = reqs.procurement_type || 'неопределен';\nvar reqStr = JSON.stringify(reqs, null, 2);\nif (reqStr.length > 30000) reqStr = reqStr.substring(0, 30000);\nvar specStr = JSON.stringify(body.specData || {}, null, 2);\nif (specStr.length > 30000) specStr = specStr.substring(0, 30000);\nvar ciStr = JSON.stringify(body.contractorInfo || {}, null, 2);\n\nvar p = 'Ти си експерт по структуриране на технически предложения за обществени поръчки.\\n\\n';\np += 'Получаваш:\\nТИП ПОРЪЧКА: ' + reqType + '\\n\\n';\np += 'ИЗВЛЕЧЕНИ ИЗИСКВАНИЯ:\\n' + reqStr + '\\n\\n';\np += 'АНАЛИЗ НА СПЕЦИФИКАЦИЯТА:\\n' + specStr + '\\n\\n';\np += 'ИНФОРМАЦИЯ ЗА ИЗПЪЛНИТЕЛЯ:\\n' + ciStr + '\\n\\n';\n\np += '## ИМПЕРАТИВНО ПРАВИЛО — СТРУКТУРА НА ДОКУМЕНТА\\n';\np += 'Структурата на документа ТРЯБВА да следва ТОЧНО структурата зададена от Възложителя.\\n';\np += '- Всяко изискване с ID от вида X.X (1.1, 1.2, 1.3, 1.4 и т.н.) = ГЛАВНА СЕКЦИЯ на документа.\\n';\np += '- Заглавието на секцията = ТОЧНО заглавието от изискването, без промяна и без преименуване.\\n';\np += '- Редът на секциите = ТОЧНО редът от изискванията.\\n';\np += '- Подсекциите (subsections) ги определяш ти, но ТРЯБВА да обхванат ВСИЧКО поискано в full_text на изискването.\\n';\np += '- Sub-requirements от изискването ЗАДЪЛЖИТЕЛНО стават подсекции или ключова част от content_guidance.\\n';\np += '- НЕ ДОБАВЯЙ секции, които НЕ СА поискани от възложителя!\\n';\np += '- НЕ ПРЕПОДРЕЖДАЙ и НЕ ПРЕИМЕНУВАЙ секциите!\\n';\np += '- Изисквания от общ характер (срок за изпълнение, гаранционни срокове и т.н.) НЕ стават отделни секции — информацията от тях се интегрира в съответните секции.\\n\\n';\n\np += '## ФОРМАТ НА МЕРКИ\\n';\np += 'Навсякъде, където възложителят изисква представяне на МЯРКА (мерки), всяка мярка ЗАДЪЛЖИТЕЛНО получава СВОЯ ОТДЕЛНА подсекция.\\n';\np += 'В content_guidance на подсекцията за мярка ЗАДЪЛЖИТЕЛНО напиши, че мярката трябва да съдържа:\\n';\np += '1. Наименование на мярката\\n';\np += '2. Същност на мярката\\n';\np += '3. Конкретни дейности, които се предвиждат за изпълнението й\\n';\np += '4. Времеви план за прилагане на дейностите по мярката\\n';\np += '5. Конкретен експерт, ангажиран с прякото изпълнение + конкретни задължения (ако повече от 1 — кой коя дейност изпълнява)\\n';\np += '6. Контролни дейности и мониторинг: честота на прегледи, действия при констатирани отклонения, лица отговорни за контрола\\n';\np += '7. Дефиниране на очаквания и целен ефект от прилагането на мярката\\n';\np += 'ЗАБРАНЕНО е елементи от различни мерки да се обединяват! Всяка мярка = отделна самостоятелна подсекция.\\n\\n';\n\np += '## ПРАВИЛА ЗА ПОДСЕКЦИИ\\n';\np += '1. Всяка подсекция е МАКСИМУМ 5 страници (~1875 думи)\\n';\np += '2. Ако тема изисква повече от 5 стр. — раздели на 2+ подсекции\\n';\np += '3. Всяка подсекция ще бъде написана от ОТДЕЛЕН AI агент, затова указанията в content_guidance трябва да са САМОДОСТАТЪЧНИ\\n';\np += '4. В content_guidance включи: какво точно да пише, кои конкретни данни от спецификацията да ползва, кои таблици да направи\\n';\np += '5. Линейният график ЗАДЪЛЖИТЕЛНО е ОТДЕЛНА подсекция с указание за таблична форма (Дейност | Седмица/Период | Ресурси | Отговорник)\\n';\np += '6. Реалистичен общ обем: 20-60 стр. в зависимост от сложността на поръчката\\n';\np += '7. Когато full_text на изискването казва \"следва да се посочат\" или \"следва да бъдат обхванати\" — включи в content_guidance с директна инструкция\\n\\n';\n\np += '## ФОРМАТ\\nВърни САМО валиден JSON (БЕЗ markdown блокове):\\n';\np += '{\\n  \"document_title\": \"ПРЕДЛОЖЕНИЕ ЗА ИЗПЪЛНЕНИЕ на [точно наименование на поръчката]\",\\n';\np += '  \"procurement_type\": \"' + reqType + '\",\\n';\np += '  \"total_estimated_pages\": 40,\\n';\np += '  \"sections\": [\\n    {\\n';\np += '      \"id\": \"1.1\",\\n      \"title\": \"ТОЧНО заглавието от изискването\",\\n';\np += '      \"requirement_id\": \"1.1\",\\n';\np += '      \"subsections\": [\\n        {\\n';\np += '          \"id\": \"1.1.1\",\\n          \"title\": \"Подзаглавие\",\\n';\np += '          \"estimated_pages\": 4,\\n';\np += '          \"content_guidance\": [\"Конкретно какво да се напише...\"],\\n';\np += '          \"spec_data_to_use\": [\"key_quantities\"],\\n';\np += '          \"tables_needed\": [{\"title\": \"Заглавие\", \"columns\": [\"Кол1\", \"Кол2\"]}]\\n';\np += '        }\\n      ]\\n    }\\n  ],\\n';\np += '  \"appendices\": []\\n}\\n\\n';\np += 'ПОМНИ:\\n';\np += '- Секциите = requirement IDs от изискванията. НЕ измисляй собствена структура!\\n';\np += '- Всяка мярка = ОТДЕЛНА самостоятелна подсекция с ПЪЛЕН формат в content_guidance!\\n';\np += '- Заглавията = ТОЧНО от изискванията!\\n';\np += 'САМО JSON, без друг текст.';\n\nreturn [{ json: { prompt: p } }];"
       },
       "typeVersion": 2
     },
@@ -29,7 +35,10 @@
       "id": "llm",
       "name": "Plan Document",
       "type": "@n8n/n8n-nodes-langchain.chainLlm",
-      "position": [520, 300],
+      "position": [
+        520,
+        300
+      ],
       "parameters": {
         "text": "={{ $json.prompt }}",
         "promptType": "define",
@@ -37,7 +46,7 @@
           "messageValues": [
             {
               "type": "system",
-              "message": "You create VERY detailed document plans for Bulgarian procurement proposals. CRITICAL CONSTRAINT: Each subsection will be written by a SEPARATE AI in a SEPARATE API call, so each subsection MUST be: (1) self-contained with complete guidance, (2) MAXIMUM 5 pages (~1875 words), (3) if a topic needs more than 5 pages, split into multiple subsections. Output ONLY valid JSON, no markdown. Language: Bulgarian."
+              "message": "# РОЛЯ И ЦЕЛ\nСъздаваш ДЕТАЙЛНИ планове на документи за технически предложения за обществени поръчки.\n\n# ИМПЕРАТИВНО ПРАВИЛО\nСтруктурата на документа ТРЯБВА да следва ТОЧНО структурата от изискванията на Възложителя:\n- Requirement IDs (1.1, 1.2, 1.3, 1.4) = СЕКЦИИ с ТОЧНИТЕ им заглавия\n- НЕ измисляй собствена структура\n- НЕ добавяй секции, непоискани от възложителя\n- НЕ преименувай секциите\n\n# ФОРМАТ НА МЕРКИ\nВсяка мярка = ОТДЕЛНА подсекция с 7 задължителни елемента в content_guidance:\nнаименование, същност, дейности, времеви план, експерт+задължения, контрол+мониторинг, очакван ефект.\nЗАБРАНЕНО: обединяване на елементи от различни мерки.\n\n# СТЪПКИ\n1. Прочети requirement IDs → те са секциите.\n2. За всяко изискване: прочети full_text → определи подсекции, които обхващат ВСИЧКО поискано.\n3. Sub-requirements → ЗАДЪЛЖИТЕЛНО стават подсекции.\n4. Мерки → ОТДЕЛНИ подсекции с пълен формат в content_guidance.\n5. Линеен график → ОТДЕЛНА подсекция.\n6. Провери: обхванати ли са ВСИЧКИ реквизити от full_text?\n\n# ФОРМАТ\nИзход: САМО валиден JSON. Без markdown блокове. Език: български."
             }
           ]
         }
@@ -48,7 +57,10 @@
       "id": "model",
       "name": "Claude Sonnet",
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
-      "position": [440, 520],
+      "position": [
+        440,
+        520
+      ],
       "parameters": {
         "model": "anthropic/claude-sonnet-4",
         "options": {
@@ -68,9 +80,12 @@
       "id": "parse",
       "name": "Parse Plan",
       "type": "n8n-nodes-base.code",
-      "position": [780, 300],
+      "position": [
+        780,
+        300
+      ],
       "parameters": {
-        "jsCode": "var raw = ($json.text || $json.response || '').trim();\nvar result;\n\ntry {\n  result = JSON.parse(raw);\n} catch (e) {\n  var m = raw.match(/```(?:json)?\\s*([\\s\\S]*?)```/);\n  var candidate = m ? m[1].trim() : raw;\n  try {\n    var s = candidate.indexOf('{');\n    var e2 = candidate.lastIndexOf('}');\n    var jsonStr = candidate.substring(s, e2 + 1);\n    jsonStr = jsonStr.replace(/,\\s*([\\]\\}])/g, '$1');\n    result = JSON.parse(jsonStr);\n  } catch (e3) {\n    result = { document_title: 'Parse error', sections: [], _raw: raw.substring(0, 2000) };\n  }\n}\n\nreturn [{ json: { documentPlan: result } }];"
+        "jsCode": "var raw = ($json.text || $json.response || '').trim();\nvar result = null;\n\n// Sanitize Unicode smart quotes that break JSON parsing\nfunction sanitize(s) {\n  return s.replace(/[\\u201C\\u201D\\u201E\\u201F\\u00AB\\u00BB\\u2018\\u2019]/g, \"'\");\n}\n\nfunction tryParse(s) {\n  try { return JSON.parse(s); } catch(e) { return null; }\n}\n\nfunction extractJson(s) {\n  var m = s.match(/```(?:json)?\\s*([\\s\\S]*?)```/);\n  var c = m ? m[1].trim() : s;\n  var start = c.indexOf('{');\n  var end = c.lastIndexOf('}');\n  if (start === -1 || end === -1) return s;\n  return c.substring(start, end + 1);\n}\n\nfunction fixCommon(s) {\n  // Remove trailing commas before ] or }\n  s = s.replace(/,\\s*([\\]\\}])/g, '$1');\n  return s;\n}\n\n// Character-by-character parser for unescaped quotes inside JSON strings\nfunction fixQuotes(s) {\n  var out = '';\n  var inStr = false;\n  var escaped = false;\n  for (var i = 0; i < s.length; i++) {\n    var ch = s[i];\n    if (escaped) { out += ch; escaped = false; continue; }\n    if (ch === '\\\\') { out += ch; escaped = true; continue; }\n    if (ch === '\"') {\n      if (!inStr) {\n        inStr = true;\n        out += ch;\n      } else {\n        var rest = s.substring(i + 1).trimStart();\n        var next = rest.length > 0 ? rest[0] : '';\n        if (next === ':' || next === ',' || next === '}' || next === ']' || rest.length === 0) {\n          inStr = false;\n          out += ch;\n        } else {\n          out += '\\\\\"';\n        }\n      }\n    } else {\n      out += ch;\n    }\n  }\n  return out;\n}\n\n// Step 0: sanitize smart quotes\nraw = sanitize(raw);\n\n// Strategy 1: direct parse\nresult = tryParse(raw);\n\n// Strategy 2: extract from markdown + fix trailing commas\nif (!result) {\n  var extracted = fixCommon(extractJson(raw));\n  result = tryParse(extracted);\n}\n\n// Strategy 3: fixQuotes fallback\nif (!result) {\n  var extracted2 = fixCommon(extractJson(raw));\n  result = tryParse(fixQuotes(extracted2));\n}\n\n// Fallback with error marker\nif (!result) {\n  result = { document_title: 'Parse error', sections: [], _raw: raw.substring(0, 5000), _parse_error: true };\n}\n\nreturn [{ json: { documentPlan: result } }];"
       },
       "typeVersion": 2
     },
@@ -78,7 +93,10 @@
       "id": "respond",
       "name": "Respond",
       "type": "n8n-nodes-base.respondToWebhook",
-      "position": [1040, 300],
+      "position": [
+        1040,
+        300
+      ],
       "parameters": {
         "respondWith": "json",
         "responseBody": "={{ JSON.stringify($json) }}"
@@ -87,11 +105,63 @@
     }
   ],
   "connections": {
-    "Webhook": { "main": [[{ "node": "Prepare Plan Prompt", "type": "main", "index": 0 }]] },
-    "Prepare Plan Prompt": { "main": [[{ "node": "Plan Document", "type": "main", "index": 0 }]] },
-    "Claude Sonnet": { "ai_languageModel": [[{ "node": "Plan Document", "type": "ai_languageModel", "index": 0 }]] },
-    "Plan Document": { "main": [[{ "node": "Parse Plan", "type": "main", "index": 0 }]] },
-    "Parse Plan": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] }
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Prepare Plan Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Plan Prompt": {
+      "main": [
+        [
+          {
+            "node": "Plan Document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Sonnet": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Plan Document",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Plan Document": {
+      "main": [
+        [
+          {
+            "node": "Parse Plan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Plan": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
-  "settings": { "executionOrder": "v1" }
+  "settings": {
+    "executionOrder": "v1"
+  }
 }
