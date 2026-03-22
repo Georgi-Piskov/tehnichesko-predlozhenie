@@ -167,7 +167,7 @@
         500
       ],
       "parameters": {
-        "jsCode": "var reqNode = $('Extract Requirements').first().json;\nvar reqs = reqNode.requirements;\nvar extractionOk = reqs && Array.isArray(reqs) && reqs.length > 0 && !reqNode._parse_error;\nvar mt = $('Merge Texts').first().json;\n\nreturn [{ json: {\n  requirements: extractionOk ? reqs : reqNode,\n  specData: $json.specData || $json,\n  contractorInfo: $('Init Job').first().json.contractorInfo,\n  requirementsExtractionFailed: !extractionOk,\n  documentationText: !extractionOk ? (mt.documentationText || mt.fullText || '').substring(0, 60000) : ''\n} }];"
+        "jsCode": "var reqNode = $('Extract Requirements').first().json;\nvar reqs = reqNode.requirements;\nvar extractionOk = reqs && Array.isArray(reqs) && reqs.length > 0 && !reqNode._parse_error;\nvar mt = $('Merge Texts').first().json;\nvar rawText = mt.fullText || mt.specificationText || mt.documentationText || '';\n\nreturn [{ json: {\n  requirements: extractionOk ? reqs : reqNode,\n  specData: $json.specData || $json,\n  contractorInfo: $('Init Job').first().json.contractorInfo,\n  requirementsExtractionFailed: !extractionOk,\n  documentationText: !extractionOk ? rawText.substring(0, 60000) : ''\n} }];"
       },
       "typeVersion": 2
     },

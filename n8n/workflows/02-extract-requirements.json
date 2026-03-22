@@ -27,7 +27,7 @@
         300
       ],
       "parameters": {
-        "jsCode": "var body = $json.body || $json;\nvar docText = body.documentationText || body.fullText || '';\nif (docText.length > 80000) docText = docText.substring(0, 80000);\nreturn [{ json: { documentText: docText } }];"
+        "jsCode": "var body = $json.body || $json;\nvar docText = body.documentationText || body.fullText || body.specificationText || '';\nif (!docText && body.text) docText = body.text;\nif (docText.length > 80000) docText = docText.substring(0, 80000);\nreturn [{ json: { documentText: docText } }];"
       },
       "typeVersion": 2
     },
