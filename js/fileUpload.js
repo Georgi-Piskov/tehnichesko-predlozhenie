@@ -105,7 +105,7 @@ const FileUpload = {
     /**
      * Build FormData with all files and contractor info
      */
-    buildFormData(contractorInfo, additionalNotes) {
+    buildFormData(contractorInfo, additionalNotes, targetPages) {
         const formData = new FormData();
 
         if (this.docFile) {
@@ -120,6 +120,8 @@ const FileUpload = {
         if (additionalNotes) {
             formData.append('additionalNotes', additionalNotes);
         }
+
+        formData.append('targetPages', String(targetPages || 50));
 
         return formData;
     }

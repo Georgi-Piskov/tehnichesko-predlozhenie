@@ -121,13 +121,19 @@ function getContractorInfo() {
     };
 }
 
+function getTargetPages() {
+    var val = parseInt(document.getElementById('targetPages').value, 10);
+    return (val >= 20 && val <= 500) ? val : 50;
+}
+
 // ===== Generation =====
 async function startGeneration() {
     if (!validateStep2()) return;
 
     const contractorInfo = getContractorInfo();
     const additionalNotes = document.getElementById('additionalNotes').value.trim();
-    const formData = FileUpload.buildFormData(contractorInfo, additionalNotes);
+    const targetPages = getTargetPages();
+    const formData = FileUpload.buildFormData(contractorInfo, additionalNotes, targetPages);
 
     // Move to step 3
     goToStep(3);
