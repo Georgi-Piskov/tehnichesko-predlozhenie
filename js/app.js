@@ -110,6 +110,7 @@ function loadSavedContractor() {
 }
 
 function getContractorInfo() {
+    var tp = parseInt(document.getElementById('targetPages').value, 10);
     return {
         name: document.getElementById('companyName').value.trim(),
         eik: document.getElementById('companyEik').value.trim(),
@@ -117,13 +118,9 @@ function getContractorInfo() {
         manager: document.getElementById('companyManager').value.trim(),
         phone: document.getElementById('companyPhone').value.trim(),
         email: document.getElementById('companyEmail').value.trim(),
-        description: document.getElementById('companyDescription').value.trim()
+        description: document.getElementById('companyDescription').value.trim(),
+        targetPages: (tp >= 20 && tp <= 500) ? tp : 50
     };
-}
-
-function getTargetPages() {
-    var val = parseInt(document.getElementById('targetPages').value, 10);
-    return (val >= 20 && val <= 500) ? val : 50;
 }
 
 // ===== Generation =====
@@ -132,8 +129,7 @@ async function startGeneration() {
 
     const contractorInfo = getContractorInfo();
     const additionalNotes = document.getElementById('additionalNotes').value.trim();
-    const targetPages = getTargetPages();
-    const formData = FileUpload.buildFormData(contractorInfo, additionalNotes, targetPages);
+    const formData = FileUpload.buildFormData(contractorInfo, additionalNotes);
 
     // Move to step 3
     goToStep(3);
