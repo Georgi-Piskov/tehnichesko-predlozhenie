@@ -27,7 +27,7 @@
         200
       ],
       "parameters": {
-        "jsCode": "var body = $json.body || $json;\n\n// Parse contractor info from FormData JSON string\nvar contractorStr = body.contractor || '{}';\nvar ci;\ntry {\n  ci = typeof contractorStr === 'string' ? JSON.parse(contractorStr) : contractorStr;\n} catch(e) {\n  ci = {};\n}\n\nvar jobId = 'tp_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);\n\nreturn [{\n  json: {\n    jobId: jobId,\n    contractorInfo: {\n      name: ci.name || '',\n      eik: ci.eik || '',\n      address: ci.address || '',\n      manager: ci.manager || '',\n      phone: ci.phone || '',\n      email: ci.email || '',\n      experience: ci.description || ci.experience || '',\n      certifications: ci.certifications || ''\n    },\n    additionalNotes: body.additionalNotes || '',\n    targetPages: parseInt(ci.targetPages) || 50,\n    timestamp: new Date().toISOString()\n  },\n  binary: $binary\n}];"
+        "jsCode": "var body = $json.body || $json;\n\n// Parse contractor info from FormData JSON string\nvar contractorStr = body.contractor || '{}';\nvar ci;\ntry {\n  ci = typeof contractorStr === 'string' ? JSON.parse(contractorStr) : contractorStr;\n} catch(e) {\n  ci = {};\n}\n\nvar jobId = 'tp_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);\n\nreturn [{\n  json: {\n    jobId: jobId,\n    contractorInfo: {\n      name: ci.name || '',\n      eik: ci.eik || '',\n      address: ci.address || '',\n      manager: ci.manager || '',\n      phone: ci.phone || '',\n      email: ci.email || '',\n      experience: ci.description || ci.experience || '',\n      certifications: ci.certifications || ''\n    },\n    additionalNotes: body.additionalNotes || '',\n    targetPages: parseInt(ci.targetPages) || 250,\n    timestamp: new Date().toISOString()\n  },\n  binary: $binary\n}];"
       },
       "typeVersion": 2
     },
@@ -167,7 +167,7 @@
         500
       ],
       "parameters": {
-        "jsCode": "var reqNode = $('Extract Requirements').first().json;\nvar reqs = reqNode.requirements;\nvar extractionOk = reqs && Array.isArray(reqs) && reqs.length > 0 && !reqNode._parse_error;\nvar mt = $('Merge Texts').first().json;\nvar rawText = mt.fullText || mt.specificationText || mt.documentationText || '';\n\nreturn [{ json: {\n  requirements: extractionOk ? reqs : reqNode,\n  specData: $json.specData || $json,\n  contractorInfo: $('Init Job').first().json.contractorInfo,\n  requirementsExtractionFailed: !extractionOk,\n  documentationText: !extractionOk ? rawText.substring(0, 40000) : '',\n  targetPages: $('Init Job').first().json.targetPages || 50\n} }];"
+        "jsCode": "var reqNode = $('Extract Requirements').first().json;\nvar reqs = reqNode.requirements;\nvar extractionOk = reqs && Array.isArray(reqs) && reqs.length > 0 && !reqNode._parse_error;\nvar mt = $('Merge Texts').first().json;\nvar rawText = mt.fullText || mt.specificationText || mt.documentationText || '';\n\nreturn [{ json: {\n  requirements: extractionOk ? reqs : reqNode,\n  specData: $json.specData || $json,\n  contractorInfo: $('Init Job').first().json.contractorInfo,\n  requirementsExtractionFailed: !extractionOk,\n  documentationText: !extractionOk ? rawText.substring(0, 40000) : '',\n  targetPages: $('Init Job').first().json.targetPages || 250\n} }];"
       },
       "typeVersion": 2
     },
