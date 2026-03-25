@@ -292,7 +292,7 @@
         1050
       ],
       "parameters": {
-        "jsCode": "var sd = $getWorkflowStaticData('global');\nvar prevCtx = sd.fullDoc || '';\nif (prevCtx.length > 2000) prevCtx = prevCtx.substring(prevCtx.length - 2000);\n\nreturn [{ json: {\n  section: $json.chunk,\n  requirements: $json.requirements,\n  specData: $json.specData,\n  contractorInfo: $json.contractorInfo,\n  previousContext: prevCtx,\n  feedback: '',\n  procurementType: $json.procurementType,\n  sectionIndex: $json.chunkIndex,\n  totalSections: $json.totalChunks,\n  writingRules: $json.writingRules || []\n} }];"
+        "jsCode": "var sd = $getWorkflowStaticData('global');\nvar prevCtx = sd.fullDoc || '';\nif (prevCtx.length > 2000) prevCtx = prevCtx.substring(prevCtx.length - 2000);\n\n// === Filter specData by spec_data_to_use from the plan ===\nvar fullSpec = $json.specData || {};\nvar fields = ($json.chunk && $json.chunk.spec_data_to_use) || [];\nvar filteredSpec = fullSpec;\n\nif (fields.length > 0) {\n  filteredSpec = {};\n  for (var i = 0; i < fields.length; i++) {\n    var key = fields[i].split('.')[0];\n    if (fullSpec[key] !== undefined) {\n      filteredSpec[key] = fullSpec[key];\n    }\n  }\n  if (Object.keys(filteredSpec).length === 0) {\n    filteredSpec = fullSpec;\n  }\n}\n\nreturn [{ json: {\n  section: $json.chunk,\n  requirements: $json.requirements,\n  specData: filteredSpec,\n  contractorInfo: $json.contractorInfo,\n  previousContext: prevCtx,\n  feedback: '',\n  procurementType: $json.procurementType,\n  sectionIndex: $json.chunkIndex,\n  totalSections: $json.totalChunks,\n  writingRules: $json.writingRules || []\n} }];"
       },
       "typeVersion": 2
     },
