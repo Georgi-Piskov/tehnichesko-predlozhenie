@@ -119,7 +119,7 @@ function getContractorInfo() {
         phone: document.getElementById('companyPhone').value.trim(),
         email: document.getElementById('companyEmail').value.trim(),
         description: document.getElementById('companyDescription').value.trim(),
-        targetPages: (tp >= 20 && tp <= 500) ? tp : 50
+        targetPages: (tp >= 20 && tp <= 500) ? tp : 250
     };
 }
 
