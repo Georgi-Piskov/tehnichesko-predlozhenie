@@ -1,0 +1,26 @@
+﻿=== ╨б╨в╨Ш╨Ы╨Ю╨Т╨Х ===
+  Heading 1: 1
+  Heading 2: 114
+  Heading 3: 240
+  Heading 4: 446
+  List Bullet: 1979
+  Normal: 2596
+
+=== STRAY * CHARACTERS ===
+Total stray * runs: 0
+
+=== REMAINING ╨Я╨Ю╨Я╨к╨Ы╨Э╨Х╨в╨Х ===
+Total: 0
+
+=== REMAINING ** MARKERS ===
+Total: 0
+
+=== REMAINING # MARKERS ===
+Total: 0
+
+=== STATS ===
+Total paragraphs: 5376
+Total tables: 93
+Headings: 801
+Bullets: 1979
+Normal: 2596

@@ -1,0 +1,19 @@
+﻿python : E:\VISUAL STUDIO\TEHNICHESKO PREDLOJENIE\scripts\format_docx.py:34: Us
+erWarning: style lookup by style_id is deprecated. Use style name as key instea
+d.
+At line:1 char:48
++ ... \TEHNICHESKO PREDLOJENIE"; python scripts/format_docx.py 2>&1 | Out-F ...
++                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (E:\VISUAL STUDI...as key instead. 
+   :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  style = doc.styles['Normal']
+╟рЁхцфрэх эр фюъєьхэЄр...
+═рёЄЁющтрэх эр ёЄшыютх...
+╬с∙ю ярЁруЁрЇш: 7767
+╧ЁхюсЁрчєтрэш чруыртш : 801
+╤·чфрфхэш ЄрсышЎш: 93
+╩юЁшушЁрэш placeholder-ш: 648
+╟рярчтрэх эр e:\VISUAL STUDIO\TEHNICHESKO PREDLOJENIE\╥╧_2026-03-26_1637_formatted.docx...
+├юЄютю!
