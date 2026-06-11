@@ -29,7 +29,7 @@
         200
       ],
       "parameters": {
-        "jsCode": "var body = $json.body || $json;\n\n// Parse contractor info from FormData JSON string\nvar contractorStr = body.contractor || '{}';\nvar ci;\ntry {\n  ci = typeof contractorStr === 'string' ? JSON.parse(contractorStr) : contractorStr;\n} catch(e) {\n  ci = {};\n}\n\nvar jobId = 'tp_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);\n\nreturn [{\n  json: {\n    jobId: jobId,\n    contractorInfo: {\n      name: ci.name || '',\n      eik: ci.eik || '',\n      address: ci.address || '',\n      manager: ci.manager || '',\n      phone: ci.phone || '',\n      email: ci.email || '',\n      experience: ci.description || ci.experience || '',\n      certifications: ci.certifications || ''\n    },\n    additionalNotes: body.additionalNotes || '',\n    targetPages: parseInt(ci.targetPages) || 250,\n    timestamp: new Date().toISOString()\n  },\n  binary: $binary\n}];"
+        "jsCode": "var body = $json.body || $json;\n\n// Parse contractor info from FormData JSON string\nvar contractorStr = body.contractor || '{}';\nvar ci;\ntry {\n  ci = typeof contractorStr === 'string' ? JSON.parse(contractorStr) : contractorStr;\n} catch(e) {\n  ci = {};\n}\n\nvar jobId = 'tp_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);\n\nreturn [{\n  json: {\n    jobId: jobId,\n    userId: $json._authUserId || '',\n    contractorInfo: {\n      name: ci.name || '',\n      eik: ci.eik || '',\n      address: ci.address || '',\n      manager: ci.manager || '',\n      phone: ci.phone || '',\n      email: ci.email || '',\n      experience: ci.description || ci.experience || '',\n      certifications: ci.certifications || ''\n    },\n    additionalNotes: body.additionalNotes || '',\n    targetPages: parseInt(ci.targetPages) || 250,\n    timestamp: new Date().toISOString()\n  },\n  binary: $binary\n}];"
       },
       "typeVersion": 2
     },
@@ -451,42 +451,6 @@
       "typeVersion": 2
     },
     {
-      "id": "gdrive1",
-      "name": "Save to Google Drive",
-      "type": "n8n-nodes-base.googleDrive",
-      "position": [
-        600,
-        1400
-      ],
-      "parameters": {
-        "resource": "file",
-        "operation": "createFromText",
-        "name": "=ТП_{{ $now.format('yyyy-MM-dd_HHmm') }}",
-        "content": "={{ $json.finalDocument }}",
-        "driveId": {
-          "__rl": true,
-          "mode": "list",
-          "value": "MyDrive"
-        },
-        "folderId": {
-          "__rl": true,
-          "mode": "list",
-          "value": "root"
-        },
-        "options": {
-          "convertToGoogleDocument": true
-        }
-      },
-      "credentials": {
-        "googleDriveOAuth2Api": {
-          "id": "CONFIGURE_IN_N8N",
-          "name": "CONFIGURE_IN_N8N"
-        }
-      },
-      "onError": "continueRegularOutput",
-      "typeVersion": 3
-    },
-    {
       "id": "s01",
       "name": "Status: Init",
       "type": "n8n-nodes-base.httpRequest",
@@ -499,7 +463,7 @@
         "url": "https://n8n.simeontsvetanovn8nworkflows.site/webhook/internal/update-status",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ jobId: $json.jobId, status: 'processing', phase: 'uploading', progress: 5, message: 'Обработка на файлове...' }) }}",
+        "jsonBody": "={{ JSON.stringify({ jobId: $json.jobId, userId: $json.userId, status: 'processing', phase: 'uploading', progress: 5, message: 'Обработка на файлове...' }) }}",
         "options": {
           "timeout": 10000
         }
@@ -678,7 +642,7 @@
         40
       ],
       "parameters": {
-        "jsCode": "var resp = $json;\nvar p = resp;\nif (Array.isArray(p)) p = p[0] || {};\n// get_my_profile връща профила; при 401/грешка няма role\nvar role = (p && p.role) ? String(p.role) : '';\nvar tier = (p && p.tier) ? String(p.tier) : '';\nvar authorized = role === 'admin' || role === 'business' || tier === 'business';\n// Възстановяваме оригиналния webhook item (body + binary), HTTP нодът го замени\nvar wh = $('Webhook').first();\nvar out = Object.assign({}, wh.json, { _authRole: role, _authorized: authorized });\nreturn [{ json: out, binary: wh.binary }];"
+        "jsCode": "var resp = $json;\nvar p = resp;\nif (Array.isArray(p)) p = p[0] || {};\n// get_my_profile връща профила; при 401/грешка няма role\nvar role = (p && p.role) ? String(p.role) : '';\nvar tier = (p && p.tier) ? String(p.tier) : '';\nvar authorized = role === 'admin' || role === 'business' || tier === 'business';\n// Възстановяваме оригиналния webhook item (body + binary), HTTP нодът го замени\nvar wh = $('Webhook').first();\nvar userId = (p && p.id) ? String(p.id) : '';\nvar out = Object.assign({}, wh.json, { _authRole: role, _authUserId: userId, _authorized: authorized });\nreturn [{ json: out, binary: wh.binary }];"
       },
       "typeVersion": 2
     },
@@ -1046,11 +1010,6 @@
         [
           {
             "node": "Status: Complete",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Save to Google Drive",
             "type": "main",
             "index": 0
           }

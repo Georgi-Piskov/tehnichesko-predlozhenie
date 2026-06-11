@@ -27,7 +27,7 @@
         100
       ],
       "parameters": {
-        "jsCode": "const body = $json.body || $json;\nconst jobId = body.jobId;\nif (!jobId) return [];\n\nconst sd = $getWorkflowStaticData('global');\nif (!sd.jobs) sd.jobs = {};\n\n// If result is included, store it\nif (body.result) {\n  sd.jobs[jobId] = {\n    ...sd.jobs[jobId],\n    ...body,\n    completedAt: new Date().toISOString()\n  };\n} else {\n  sd.jobs[jobId] = {\n    ...(sd.jobs[jobId] || {}),\n    status: body.status || 'processing',\n    phase: body.phase || 'init',\n    progress: body.progress || 0,\n    message: body.message || '',\n    updatedAt: new Date().toISOString()\n  };\n}\n\nreturn [{ json: { ok: true } }];"
+        "jsCode": "const body = $json.body || $json;\nconst jobId = body.jobId;\nif (!jobId) return [];\n\nconst sd = $getWorkflowStaticData('global');\nif (!sd.jobs) sd.jobs = {};\n\n// If result is included, store it\nif (body.result) {\n  sd.jobs[jobId] = {\n    ...sd.jobs[jobId],\n    ...body,\n    completedAt: new Date().toISOString()\n  };\n} else {\n  sd.jobs[jobId] = {\n    ...(sd.jobs[jobId] || {}),\n    status: body.status || 'processing',\n    phase: body.phase || 'init',\n    progress: body.progress || 0,\n    message: body.message || '',\n    updatedAt: new Date().toISOString()\n  };\n}\n\n// === Proceno Phase 3: подготвя ред за tp_jobs upsert (Supabase) ===\nvar row = {\n  job_id: jobId,\n  status: body.status || 'processing',\n  phase: body.phase || 'init',\n  progress: body.progress || 0,\n  message: body.message || '',\n  updated_at: new Date().toISOString()\n};\nif (body.userId) row.user_id = body.userId;\nif (body.result) {\n  var r = Object.assign({}, body.result);\n  if (r.text) { row.document = r.text; delete r.text; }\n  row.result = r;\n}\nreturn [{ json: { ok: true, supabaseRow: row } }];"
       },
       "typeVersion": 2
     },
@@ -195,6 +195,54 @@
         }
       },
       "typeVersion": 1.1
+    },
+    {
+      "id": "sb-mirror",
+      "name": "Mirror to Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        600,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://pxyncifjsyplsotpeopt.supabase.co/rest/v1/tp_jobs?on_conflict=job_id",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "contentType": "json",
+        "jsonBody": "={{ JSON.stringify($json.supabaseRow) }}",
+        "options": {
+          "timeout": 15000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "CONFIGURE_IN_N8N",
+          "name": "Supabase TP service_role (apikey header)"
+        }
+      },
+      "typeVersion": 4.2,
+      "onError": "continueRegularOutput"
     }
   ],
   "connections": {
@@ -269,6 +317,17 @@
         [
           {
             "node": "Respond Download",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Status": {
+      "main": [
+        [
+          {
+            "node": "Mirror to Supabase",
             "type": "main",
             "index": 0
           }
