@@ -14,7 +14,9 @@
         "httpMethod": "POST",
         "path": "tp-generate",
         "responseMode": "responseNode",
-        "options": {}
+        "options": {
+          "allowedOrigins": "https://proceno.net"
+        }
       },
       "typeVersion": 2
     },
@@ -47,11 +49,11 @@
             "entries": [
               {
                 "name": "Access-Control-Allow-Origin",
-                "value": "*"
+                "value": "https://proceno.net"
               },
               {
                 "name": "Access-Control-Allow-Headers",
-                "value": "Content-Type"
+                "value": "Content-Type, Authorization"
               }
             ]
           }
@@ -623,6 +625,122 @@
         }
       },
       "typeVersion": 4.2
+    },
+    {
+      "id": "auth1",
+      "name": "Check Auth",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        150,
+        40
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://pxyncifjsyplsotpeopt.supabase.co/rest/v1/rpc/get_my_profile",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4eW5jaWZqc3lwbHNvdHBlb3B0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNDIwODEsImV4cCI6MjA4ODkxODA4MX0.Gq28u9cusCOPyBg7NrQKW09ve96d6qlc0M8nEXl-z5I"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ $json.headers.authorization || '' }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "contentType": "json",
+        "jsonBody": "{}",
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "typeVersion": 4.2
+    },
+    {
+      "id": "auth2",
+      "name": "Verify Access",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        300,
+        40
+      ],
+      "parameters": {
+        "jsCode": "var resp = $json;\nvar p = resp;\nif (Array.isArray(p)) p = p[0] || {};\n// get_my_profile връща профила; при 401/грешка няма role\nvar role = (p && p.role) ? String(p.role) : '';\nvar tier = (p && p.tier) ? String(p.tier) : '';\nvar authorized = role === 'admin' || role === 'business' || tier === 'business';\n// Възстановяваме оригиналния webhook item (body + binary), HTTP нодът го замени\nvar wh = $('Webhook').first();\nvar out = Object.assign({}, wh.json, { _authRole: role, _authorized: authorized });\nreturn [{ json: out, binary: wh.binary }];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "auth3",
+      "name": "IF Authorized",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        450,
+        40
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "authcond1",
+              "leftValue": "={{ $json._authorized }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "typeVersion": 2.2
+    },
+    {
+      "id": "auth4",
+      "name": "Respond 403",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [
+        600,
+        40
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: 'forbidden', message: 'Достъпът изисква Business акаунт в Proceno.' }) }}",
+        "options": {
+          "responseCode": 403,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "https://proceno.net"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "Content-Type, Authorization"
+              }
+            ]
+          }
+        }
+      },
+      "typeVersion": 1.1
     }
   ],
   "connections": {
@@ -630,7 +748,7 @@
       "main": [
         [
           {
-            "node": "Init Job",
+            "node": "Check Auth",
             "type": "main",
             "index": 0
           }
@@ -933,6 +1051,46 @@
           },
           {
             "node": "Save to Google Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Auth": {
+      "main": [
+        [
+          {
+            "node": "Verify Access",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Access": {
+      "main": [
+        [
+          {
+            "node": "IF Authorized",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Authorized": {
+      "main": [
+        [
+          {
+            "node": "Init Job",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 403",
             "type": "main",
             "index": 0
           }
