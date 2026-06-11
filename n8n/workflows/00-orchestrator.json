@@ -116,7 +116,7 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify($json) }}",
         "options": {
-          "timeout": 600000
+          "timeout": 1500000
         }
       },
       "retryOnFail": true,
@@ -152,7 +152,7 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify($json) }}",
         "options": {
-          "timeout": 600000
+          "timeout": 1500000
         }
       },
       "retryOnFail": true,
@@ -188,7 +188,7 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify($('After Spec Analysis').first().json) }}",
         "options": {
-          "timeout": 600000
+          "timeout": 1500000
         }
       },
       "retryOnFail": true,
@@ -264,7 +264,7 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify($json) }}",
         "options": {
-          "timeout": 600000
+          "timeout": 1500000
         }
       },
       "retryOnFail": true,
@@ -313,7 +313,7 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify($json) }}",
         "options": {
-          "timeout": 600000
+          "timeout": 1500000
         }
       },
       "retryOnFail": true,
@@ -349,7 +349,7 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify($json) }}",
         "options": {
-          "timeout": 600000
+          "timeout": 1500000
         }
       },
       "retryOnFail": true,
@@ -429,7 +429,7 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify($json) }}",
         "options": {
-          "timeout": 600000
+          "timeout": 1500000
         }
       },
       "retryOnFail": true,
