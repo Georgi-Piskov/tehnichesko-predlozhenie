@@ -723,12 +723,12 @@
       "main": [
         [
           {
-            "node": "Send Response",
+            "node": "Status: Init",
             "type": "main",
             "index": 0
           },
           {
-            "node": "Status: Init",
+            "node": "Send Response",
             "type": "main",
             "index": 0
           }
@@ -772,12 +772,12 @@
       "main": [
         [
           {
-            "node": "Extract Requirements",
+            "node": "Status: Requirements",
             "type": "main",
             "index": 0
           },
           {
-            "node": "Status: Requirements",
+            "node": "Extract Requirements",
             "type": "main",
             "index": 0
           }
@@ -799,12 +799,12 @@
       "main": [
         [
           {
-            "node": "Analyze Spec",
+            "node": "Status: Analyzing",
             "type": "main",
             "index": 0
           },
           {
-            "node": "Status: Analyzing",
+            "node": "Analyze Spec",
             "type": "main",
             "index": 0
           }
@@ -826,12 +826,12 @@
       "main": [
         [
           {
-            "node": "Plan Document",
+            "node": "Status: Planning",
             "type": "main",
             "index": 0
           },
           {
-            "node": "Status: Planning",
+            "node": "Plan Document",
             "type": "main",
             "index": 0
           }
@@ -882,12 +882,12 @@
       "main": [
         [
           {
-            "node": "Write Section",
+            "node": "Status: Writing",
             "type": "main",
             "index": 0
           },
           {
-            "node": "Status: Writing",
+            "node": "Write Section",
             "type": "main",
             "index": 0
           }
@@ -993,12 +993,12 @@
       "main": [
         [
           {
-            "node": "Pipeline Complete",
+            "node": "Status: Finalizing",
             "type": "main",
             "index": 0
           },
           {
-            "node": "Status: Finalizing",
+            "node": "Pipeline Complete",
             "type": "main",
             "index": 0
           }
