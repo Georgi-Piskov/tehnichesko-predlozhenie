@@ -705,6 +705,107 @@
         }
       },
       "typeVersion": 1.1
+    },
+    {
+      "id": "n_reserve_credits",
+      "name": "Reserve Credits",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        380,
+        120
+      ],
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "https://pxyncifjsyplsotpeopt.supabase.co/rest/v1/rpc/reserve_credits",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4eW5jaWZqc3lwbHNvdHBlb3B0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNDIwODEsImV4cCI6MjA4ODkxODA4MX0.Gq28u9cusCOPyBg7NrQKW09ve96d6qlc0M8nEXl-z5I"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ $('Webhook').first().json.headers.authorization || '' }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "contentType": "json",
+        "jsonBody": "={{ JSON.stringify({ p_job_id: $json.jobId, p_service: 'tp', p_units: $json.targetPages }) }}",
+        "options": {
+          "timeout": 15000
+        }
+      }
+    },
+    {
+      "id": "n_restore_init",
+      "name": "Restore Init",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        200
+      ],
+      "parameters": {
+        "jsCode": "// Връща оригиналния Init Job item (json + binary) — reserve беше прозрачен.\nvar init = $('Init Job').first();\nreturn [{ json: init.json, binary: init.binary }];\n"
+      }
+    },
+    {
+      "id": "n_status_insufficient",
+      "name": "Status: Insufficient",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        520,
+        360
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://n8n.simeontsvetanovn8nworkflows.site/webhook/internal/update-status",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ jobId: $('Init Job').first().json.jobId, userId: $('Init Job').first().json.userId, status: 'error', phase: 'error', progress: 0, message: ($json.message === 'insufficient_credits' ? 'Недостатъчно кредити за тази генерация.' : ($json.message === 'access_denied' ? 'Генерациите изискват Business абонамент.' : 'Грешка при резервиране на кредити.')) }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      }
+    },
+    {
+      "id": "n_respond_insufficient",
+      "name": "Respond Insufficient",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        700,
+        360
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ jobId: $('Init Job').first().json.jobId, error: ($json.message || 'insufficient_credits'), message: 'Недостатъчно кредити за тази генерация.' }) }}",
+        "options": {
+          "responseCode": 402,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "https://proceno.net"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "Content-Type, Authorization"
+              }
+            ]
+          }
+        }
+      }
     }
   ],
   "connections": {
@@ -723,12 +824,7 @@
       "main": [
         [
           {
-            "node": "Status: Init",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Send Response",
+            "node": "Reserve Credits",
             "type": "main",
             "index": 0
           }
@@ -1050,6 +1146,51 @@
         [
           {
             "node": "Respond 403",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reserve Credits": {
+      "main": [
+        [
+          {
+            "node": "Restore Init",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Status: Insufficient",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Init": {
+      "main": [
+        [
+          {
+            "node": "Status: Init",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Status: Insufficient": {
+      "main": [
+        [
+          {
+            "node": "Respond Insufficient",
             "type": "main",
             "index": 0
           }
