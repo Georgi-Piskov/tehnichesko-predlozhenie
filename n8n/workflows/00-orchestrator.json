@@ -892,27 +892,48 @@
         1300
       ],
       "parameters": {
-        "jsCode": "var sd = $getWorkflowStaticData('global');\nvar jobId = $('Init Job').first().json.jobId;\nvar startUsage = (sd.usage && sd.usage[jobId] != null) ? sd.usage[jobId] : null;\nvar endUsage = null;\ntry {\n  var ue = $('Usage End').first().json;\n  if (ue && ue.data && ue.data.total_usage != null) endUsage = parseFloat(ue.data.total_usage);\n} catch (e) {}\nvar costUsd = null;\nif (startUsage != null && endUsage != null && endUsage >= startUsage) {\n  costUsd = Math.round((endUsage - startUsage) * 10000) / 10000;\n}\nif (sd.usage && jobId) delete sd.usage[jobId];\nreturn [{ json: { statusPayload: {\n  jobId: jobId, status: 'completed', phase: 'completed', progress: 100,\n  message: 'Готово!', cost_usd: costUsd\n} } }];\n"
+        "jsCode": "var sd = $getWorkflowStaticData('global');\nvar jobId = $('Init Job').first().json.jobId;\nvar startUsage = (sd.usage && sd.usage[jobId] != null) ? sd.usage[jobId] : null;\nvar endUsage = null;\ntry {\n  var ue = $('Usage End').first().json;\n  if (ue && ue.data && ue.data.total_usage != null) endUsage = parseFloat(ue.data.total_usage);\n} catch (e) {}\nvar costUsd = null;\nif (startUsage != null && endUsage != null && endUsage >= startUsage) {\n  costUsd = Math.round((endUsage - startUsage) * 10000) / 10000;\n}\nvar creditsReserved = null;\ntry {\n  var rc = $('Reserve Credits').first().json;\n  if (rc && rc.cost != null) creditsReserved = rc.cost;\n} catch (e) {}\nif (sd.usage && jobId) delete sd.usage[jobId];\n// PATCH body — само cost колоните (null се пропуска от PostgREST? не — затова филтрираме)\nvar patch = {};\nif (costUsd != null) patch.cost_usd = costUsd;\nif (creditsReserved != null) patch.credits_reserved = creditsReserved;\nreturn [{ json: { jobId: jobId, patch: patch, hasData: Object.keys(patch).length > 0 } }];\n"
       }
     },
     {
-      "id": "n_status_cost",
-      "name": "Status: Cost",
+      "id": "n_write_cost",
+      "name": "Write Cost (PATCH)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        860,
+        1040,
         1300
       ],
       "onError": "continueRegularOutput",
       "parameters": {
-        "method": "POST",
-        "url": "https://n8n.simeontsvetanovn8nworkflows.site/webhook/internal/update-status",
+        "method": "PATCH",
+        "url": "={{ 'https://pxyncifjsyplsotpeopt.supabase.co/rest/v1/tp_jobs?job_id=eq.' + $json.jobId }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "SERVICE_KEY_PLACEHOLDER_SET_IN_N8N"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer SERVICE_KEY_PLACEHOLDER_SET_IN_N8N"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($json.statusPayload) }}",
+        "jsonBody": "={{ JSON.stringify($json.patch) }}",
         "options": {
-          "timeout": 10000,
+          "timeout": 15000,
           "response": {
             "response": {
               "neverError": true
@@ -1347,7 +1368,7 @@
       "main": [
         [
           {
-            "node": "Status: Cost",
+            "node": "Write Cost (PATCH)",
             "type": "main",
             "index": 0
           }
