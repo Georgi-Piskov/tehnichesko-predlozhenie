@@ -281,7 +281,7 @@
         1100
       ],
       "parameters": {
-        "jsCode": "var ad = $('Assemble Document').first().json;\nvar finalText = ad.fullDocument || '';\nvar wc = finalText.trim().split(/\\s+/).length;\nvar sr = ad.sectionResults || [];\nreturn [{ json: {\n  success: true,\n  finalDocument: finalText,\n  statusPayload: {\n    jobId: $('Init Job').first().json.jobId,\n    userId: $('Init Job').first().json.userId,\n    status: 'completed',\n    phase: 'completed',\n    progress: 100,\n    message: 'Готово!',\n    result: {\n      text: finalText,\n      stats: { wordCount: wc, estimatedPages: Math.round(wc / 375), sections: sr.length }\n    }\n  }\n} }];"
+        "jsCode": "var ad = $('Assemble Document').first().json;\nvar finalText = ad.fullDocument || '';\nvar wc = finalText.trim().split(/\\s+/).length;\nvar sr = ad.sectionResults || [];\nreturn [{ json: {\n  success: true,\n  finalDocument: finalText,\n  statusPayload: {\n    jobId: $('Init Job').first().json.jobId,\n    userId: $('Init Job').first().json.userId,\n    status: 'completed',\n    phase: 'completed',\n    progress: 100,\n    message: 'Готово!',\n    credits_reserved: (function(){ try { var rc = $('Reserve Credits').first().json; return (rc && rc.cost != null) ? rc.cost : null; } catch(e){ return null; } })(),\n    result: {\n      text: finalText,\n      stats: { wordCount: wc, estimatedPages: Math.round(wc / 375), sections: sr.length }\n    }\n  }\n} }];"
       },
       "typeVersion": 2
     },
@@ -806,6 +806,120 @@
           }
         }
       }
+    },
+    {
+      "id": "n_usage_start",
+      "name": "Usage Start",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        360
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "GET",
+        "url": "https://openrouter.ai/api/v1/credits",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "m178K0X375Ulvip9",
+          "name": "OpenRouter Mgmt (cost tracking)"
+        }
+      }
+    },
+    {
+      "id": "n_store_usage_start",
+      "name": "Store Usage Start",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        360
+      ],
+      "parameters": {
+        "jsCode": "var sd = $getWorkflowStaticData('global');\nsd.usage = sd.usage || {};\nvar jobId = $('Init Job').first().json.jobId;\nvar u = ($json && $json.data && $json.data.total_usage != null) ? parseFloat($json.data.total_usage) : null;\nif (jobId && u != null && !isNaN(u)) sd.usage[jobId] = u;\nreturn [{ json: { ok: true } }];\n"
+      }
+    },
+    {
+      "id": "n_usage_end",
+      "name": "Usage End",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        500,
+        1300
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "GET",
+        "url": "https://openrouter.ai/api/v1/credits",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "m178K0X375Ulvip9",
+          "name": "OpenRouter Mgmt (cost tracking)"
+        }
+      }
+    },
+    {
+      "id": "n_compute_cost",
+      "name": "Compute Cost",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        1300
+      ],
+      "parameters": {
+        "jsCode": "var sd = $getWorkflowStaticData('global');\nvar jobId = $('Init Job').first().json.jobId;\nvar startUsage = (sd.usage && sd.usage[jobId] != null) ? sd.usage[jobId] : null;\nvar endUsage = null;\ntry {\n  var ue = $('Usage End').first().json;\n  if (ue && ue.data && ue.data.total_usage != null) endUsage = parseFloat(ue.data.total_usage);\n} catch (e) {}\nvar costUsd = null;\nif (startUsage != null && endUsage != null && endUsage >= startUsage) {\n  costUsd = Math.round((endUsage - startUsage) * 10000) / 10000;\n}\nif (sd.usage && jobId) delete sd.usage[jobId];\nreturn [{ json: { statusPayload: {\n  jobId: jobId, status: 'completed', phase: 'completed', progress: 100,\n  message: 'Готово!', cost_usd: costUsd\n} } }];\n"
+      }
+    },
+    {
+      "id": "n_status_cost",
+      "name": "Status: Cost",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        860,
+        1300
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "https://n8n.simeontsvetanovn8nworkflows.site/webhook/internal/update-status",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.statusPayload) }}",
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      }
     }
   ],
   "connections": {
@@ -1108,6 +1222,11 @@
             "node": "Status: Complete",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Usage End",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -1182,6 +1301,11 @@
             "node": "Send Response",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Usage Start",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -1191,6 +1315,39 @@
         [
           {
             "node": "Respond Insufficient",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Usage Start": {
+      "main": [
+        [
+          {
+            "node": "Store Usage Start",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Usage End": {
+      "main": [
+        [
+          {
+            "node": "Compute Cost",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute Cost": {
+      "main": [
+        [
+          {
+            "node": "Status: Cost",
             "type": "main",
             "index": 0
           }
