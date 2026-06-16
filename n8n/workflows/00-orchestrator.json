@@ -79,8 +79,8 @@
       "name": "Extract from PDF",
       "type": "n8n-nodes-base.extractFromFile",
       "position": [
-        1200,
-        200
+        1400,
+        360
       ],
       "parameters": {
         "operation": "pdf",
@@ -941,6 +941,91 @@
           }
         }
       }
+    },
+    {
+      "id": "n_is_docx",
+      "name": "Is DOCX",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        200
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c_docx",
+              "operator": {
+                "type": "string",
+                "operation": "endsWith"
+              },
+              "leftValue": "={{ $json.fileName }}",
+              "rightValue": ".docx"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "n_rename_zip",
+      "name": "Rename to Zip",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1400,
+        40
+      ],
+      "parameters": {
+        "jsCode": "// DOCX е ZIP, но Compression разпознава по разширение → преименувай на .zip\nvar items = $input.all();\nreturn items.map(function(item){\n  var bin = item.binary || {};\n  if (bin.data) {\n    bin.data.fileName = 'doc.zip';\n    bin.data.fileExtension = 'zip';\n    bin.data.mimeType = 'application/zip';\n  }\n  return { json: item.json, binary: bin };\n});\n"
+      }
+    },
+    {
+      "id": "n_decompress",
+      "name": "Decompress DOCX",
+      "type": "n8n-nodes-base.compression",
+      "typeVersion": 1.1,
+      "position": [
+        1600,
+        40
+      ],
+      "parameters": {
+        "operation": "decompress",
+        "binaryPropertyName": "data",
+        "outputPrefix": "file_"
+      }
+    },
+    {
+      "id": "n_extract_docx",
+      "name": "Extract DOCX Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1800,
+        40
+      ],
+      "parameters": {
+        "jsCode": "// Извлича текст от word/document.xml на разархивиран DOCX.\n// n8n binary е filesystem mode → ВИНАГИ getBinaryDataBuffer (не .data).\nvar items = $input.all();\nvar results = [];\nfor (var idx = 0; idx < items.length; idx++) {\n  var item = items[idx];\n  var bin = item.binary || {};\n  var keys = Object.keys(bin);\n  var docKey = null;\n  for (var i = 0; i < keys.length; i++) {\n    var fn = (bin[keys[i]].fileName || '').toLowerCase();\n    if (fn === 'document.xml' || fn.endsWith('/document.xml')) { docKey = keys[i]; break; }\n  }\n  var text = '';\n  if (docKey) {\n    var buf = await this.helpers.getBinaryDataBuffer(idx, docKey);\n    var xml = buf.toString('utf-8');\n    var paras = xml.split(/<\\/w:p>/);\n    var out = [];\n    for (var p = 0; p < paras.length; p++) {\n      var m = paras[p].match(/<w:t[^>]*>([\\s\\S]*?)<\\/w:t>/g) || [];\n      var line = m.map(function(t){ return t.replace(/<[^>]+>/g, ''); }).join('');\n      if (line.trim()) out.push(line);\n    }\n    text = out.join('\\n')\n      .replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>')\n      .replace(/&quot;/g,'\"').replace(/&apos;/g,\"'\");\n  }\n  results.push({ json: { text: text, sourceField: item.json.sourceField || '', fileName: item.json.fileName || '' } });\n}\nreturn results;\n"
+      }
+    },
+    {
+      "id": "n_join_files",
+      "name": "Join Files",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        2000,
+        200
+      ],
+      "parameters": {
+        "mode": "append",
+        "numberInputs": 2
+      }
     }
   ],
   "connections": {
@@ -981,7 +1066,7 @@
       "main": [
         [
           {
-            "node": "Extract from PDF",
+            "node": "Is DOCX",
             "type": "main",
             "index": 0
           }
@@ -992,9 +1077,9 @@
       "main": [
         [
           {
-            "node": "Merge Texts",
+            "node": "Join Files",
             "type": "main",
-            "index": 0
+            "index": 1
           }
         ]
       ]
@@ -1369,6 +1454,68 @@
         [
           {
             "node": "Write Cost (PATCH)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is DOCX": {
+      "main": [
+        [
+          {
+            "node": "Rename to Zip",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Extract from PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rename to Zip": {
+      "main": [
+        [
+          {
+            "node": "Decompress DOCX",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decompress DOCX": {
+      "main": [
+        [
+          {
+            "node": "Extract DOCX Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract DOCX Text": {
+      "main": [
+        [
+          {
+            "node": "Join Files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Join Files": {
+      "main": [
+        [
+          {
+            "node": "Merge Texts",
             "type": "main",
             "index": 0
           }
