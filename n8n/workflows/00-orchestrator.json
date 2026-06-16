@@ -281,7 +281,7 @@
         1100
       ],
       "parameters": {
-        "jsCode": "var ad = $('Assemble Document').first().json;\nvar finalText = ad.fullDocument || '';\nvar wc = finalText.trim().split(/\\s+/).length;\nvar sr = ad.sectionResults || [];\nreturn [{ json: {\n  success: true,\n  finalDocument: finalText,\n  statusPayload: {\n    jobId: $('Init Job').first().json.jobId,\n    status: 'completed',\n    phase: 'completed',\n    progress: 100,\n    message: 'Готово!',\n    result: {\n      text: finalText,\n      stats: { wordCount: wc, estimatedPages: Math.round(wc / 375), sections: sr.length }\n    }\n  }\n} }];"
+        "jsCode": "var ad = $('Assemble Document').first().json;\nvar finalText = ad.fullDocument || '';\nvar wc = finalText.trim().split(/\\s+/).length;\nvar sr = ad.sectionResults || [];\nreturn [{ json: {\n  success: true,\n  finalDocument: finalText,\n  statusPayload: {\n    jobId: $('Init Job').first().json.jobId,\n    userId: $('Init Job').first().json.userId,\n    status: 'completed',\n    phase: 'completed',\n    progress: 100,\n    message: 'Готово!',\n    result: {\n      text: finalText,\n      stats: { wordCount: wc, estimatedPages: Math.round(wc / 375), sections: sr.length }\n    }\n  }\n} }];"
       },
       "typeVersion": 2
     },
@@ -483,7 +483,7 @@
         "url": "https://n8n.simeontsvetanovn8nworkflows.site/webhook/internal/update-status",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ jobId: $('Init Job').first().json.jobId, status: 'processing', phase: 'extracting_requirements', progress: 20, message: 'Извличане на изисквания...' }) }}",
+        "jsonBody": "={{ JSON.stringify({ jobId: $('Init Job').first().json.jobId, userId: $('Init Job').first().json.userId, status: 'processing', phase: 'extracting_requirements', progress: 20, message: 'Извличане на изисквания...' }) }}",
         "options": {
           "timeout": 10000
         }
@@ -503,7 +503,7 @@
         "url": "https://n8n.simeontsvetanovn8nworkflows.site/webhook/internal/update-status",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ jobId: $('Init Job').first().json.jobId, status: 'processing', phase: 'analyzing_spec', progress: 35, message: 'Анализ на спецификация...' }) }}",
+        "jsonBody": "={{ JSON.stringify({ jobId: $('Init Job').first().json.jobId, userId: $('Init Job').first().json.userId, status: 'processing', phase: 'analyzing_spec', progress: 35, message: 'Анализ на спецификация...' }) }}",
         "options": {
           "timeout": 10000
         }
@@ -523,7 +523,7 @@
         "url": "https://n8n.simeontsvetanovn8nworkflows.site/webhook/internal/update-status",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ jobId: $('Init Job').first().json.jobId, status: 'processing', phase: 'planning', progress: 50, message: 'Планиране на документа...' }) }}",
+        "jsonBody": "={{ JSON.stringify({ jobId: $('Init Job').first().json.jobId, userId: $('Init Job').first().json.userId, status: 'processing', phase: 'planning', progress: 50, message: 'Планиране на документа...' }) }}",
         "options": {
           "timeout": 10000
         }
@@ -543,7 +543,7 @@
         "url": "https://n8n.simeontsvetanovn8nworkflows.site/webhook/internal/update-status",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ jobId: $('Init Job').first().json.jobId, status: 'processing', phase: 'finalizing', progress: 88, message: 'Финална редакция...' }) }}",
+        "jsonBody": "={{ JSON.stringify({ jobId: $('Init Job').first().json.jobId, userId: $('Init Job').first().json.userId, status: 'processing', phase: 'finalizing', progress: 88, message: 'Финална редакция...' }) }}",
         "options": {
           "timeout": 10000
         }
@@ -563,7 +563,7 @@
         "url": "https://n8n.simeontsvetanovn8nworkflows.site/webhook/internal/update-status",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ jobId: $('Init Job').first().json.jobId, status: 'processing', phase: 'writing_sections', progress: Math.round(50 + ($json.sectionIndex / $json.totalSections) * 38), message: 'Писане на секция ' + ($json.sectionIndex + 1) + ' от ' + $json.totalSections + '...' }) }}",
+        "jsonBody": "={{ JSON.stringify({ jobId: $('Init Job').first().json.jobId, userId: $('Init Job').first().json.userId, status: 'processing', phase: 'writing_sections', progress: Math.round(50 + ($json.sectionIndex / $json.totalSections) * 38), message: 'Писане на секция ' + ($json.sectionIndex + 1) + ' от ' + $json.totalSections + '...' }) }}",
         "options": {
           "timeout": 10000
         }
